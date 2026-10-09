@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "skills": {
+    "wecomcli-calendar": {
+      "source": "WeComTeam/wecom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/wecomcli-calendar/SKILL.md",
+      "computedHash": "61bc0d07feba07bba14df9b2377961e0a440084a1e2887c8169df8774d1adf85"
+    },
+    "wecomcli-contact": {
+      "source": "WeComTeam/wecom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/wecomcli-contact/SKILL.md",
+      "computedHash": "d25e8cd7e8a36d5f925f43678c5ae62f16d7071d06b3fcb8d69709b6eeb7be77"
+    },
+    "wecomcli-disk": {
+      "source": "WeComTeam/wecom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/wecomcli-disk/SKILL.md",
+      "computedHash": "93627e90be5c58b1ad4ac325ba11288bab15baaa6ba36089e1c7dd088fbbe70b"
+    },
+    "wecomcli-doc": {
+      "source": "WeComTeam/wecom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/wecomcli-doc/SKILL.md",
+      "computedHash": "7bc20966d211fcc3f206c0fcdc8b0c81fd13e9cf8cf83d1b7b17f5828019883e"
+    },
+    "wecomcli-doc-manage": {
+      "source": "WeComTeam/wecom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/wecomcli-doc-manage/SKILL.md",
+      "computedHash": "41182fbdf9a75042c7e7eafeb78b2e60bf16e7d6d93c284efe50e30753501b38"
+    },
+    "wecomcli-email": {
+      "source": "WeComTeam/wecom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/wecomcli-email/SKILL.md",
+      "computedHash": "9a6b2bc12cab7ca5c6737d1646ea9fed29b95b940d4e1a6bd39ca766f4166a77"
+    },
+    "wecomcli-media": {
+      "source": "WeComTeam/wecom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/wecomcli-media/SKILL.md",
+      "computedHash": "fda5eb79095907b891324ff310aa434bb3d20cb0f65df9de6f1c40c4693f939f"
+    },
+    "wecomcli-meeting": {
+      "source": "WeComTeam/wecom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/wecomcli-meeting/SKILL.md",
+      "computedHash": "307583caf98d4528b408e10703c0022ddfc2b9381e40145497c468a08f27d114"
+    },
+    "wecomcli-message": {
+      "source": "WeComTeam/wecom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/wecomcli-message/SKILL.md",
+      "computedHash": "1869278986c8faab35073a8a6b281bbff44ea33f2a79b4ef1cdf5d5d2d2435d0"
+    },
+    "wecomcli-shared": {
+      "source": "WeComTeam/wecom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/wecomcli-shared/SKILL.md",
+      "computedHash": "906cee2c09f8b41ca55121e0bdc2657000946da7c3a9614f1468a28daaf1ee4d"
+    },
+    "wecomcli-sheet": {
+      "source": "WeComTeam/wecom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/wecomcli-sheet/SKILL.md",
+      "computedHash": "5622aaef616d3823fe985897513060e84e25d9cfa64c5bac8e1191b889835cdc"
+    },
+    "wecomcli-smartpage": {
+      "source": "WeComTeam/wecom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/wecomcli-smartpage/SKILL.md",
+      "computedHash": "c1ce8f8c7f3231853aa35e76423aa5846083071ba475ae61377cf124438cf658"
+    },
+    "wecomcli-smartsheet": {
+      "source": "WeComTeam/wecom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/wecomcli-smartsheet/SKILL.md",
+      "computedHash": "1c6430c1d2db9bcfa38e616a9b65b33a1665ccdfba72b33e1ace47c9e8532bd8"
+    },
+    "wecomcli-todo": {
+      "source": "WeComTeam/wecom-cli",
+      "sourceType": "github",
+      "skillPath": "skills/wecomcli-todo/SKILL.md",
+      "computedHash": "57cac3e52e9b92ccee3bb069a2d9db2de976539467cbb944e8aca714ad285611"
+    }
+  }
+}

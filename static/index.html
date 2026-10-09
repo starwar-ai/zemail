@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>邮件分析助手</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --primary-light: #eff6ff;
+    --border: #e5e7eb;
+    --text: #1f2937;
+    --text-2: #6b7280;
+    --text-3: #9ca3af;
+    --bg: #f7f8fa;
+    --green: #16a34a;
+    --green-light: #f0fdf4;
+    --red: #b91c1c;
+    --red-bg: #fef2f2;
+    --red-border: #fecaca;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  input, select { font-family: inherit; }
+  .hidden { display: none !important; }
+
+  /* ---------- 登录页 ---------- */
+  #login-view {
+    position: fixed; inset: 0; z-index: 40; background: var(--bg);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .login-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 14px;
+    width: 360px; max-width: 100%; padding: 34px 30px;
+    box-shadow: 0 8px 30px rgba(15,23,42,.08);
+  }
+  .login-title { font-size: 19px; font-weight: 700; text-align: center; }
+  .login-title::before {
+    content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 3px;
+    background: var(--primary); margin-right: 8px; vertical-align: 2px;
+  }
+  .login-sub { font-size: 12px; color: var(--text-3); text-align: center; margin: 6px 0 22px; }
+  .login-card input {
+    width: 100%; padding: 10px 13px; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: 14px; outline: none; margin-bottom: 10px;
+  }
+  .login-card input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+  .login-error {
+    background: var(--red-bg); border: 1px solid var(--red-border); color: var(--red);
+    border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin-bottom: 10px;
+  }
+
+  #app { display: flex; height: 100vh; }
+
+  /* ---------- 侧边栏 ---------- */
+  #sidebar {
+    width: 300px; flex-shrink: 0; background: #fff; border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .brand { padding: 20px 20px 14px; border-bottom: 1px solid var(--border); }
+  .brand-name { font-size: 17px; font-weight: 700; letter-spacing: .5px; }
+  .brand-name::before {
+    content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 3px;
+    background: var(--primary); margin-right: 8px; vertical-align: 1px;
+  }
+  .brand-sub { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+
+  .analyze-box { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .analyze-box input {
+    width: 100%; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: 13px; outline: none; margin-bottom: 8px;
+  }
+  .analyze-box input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+  .btn-primary {
+    width: 100%; padding: 9px 0; border: none; border-radius: 8px; font-size: 13px;
+    font-weight: 600; background: var(--primary); color: #fff;
+  }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+  .progress { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--text-2); }
+  .spinner {
+    width: 14px; height: 14px; border: 2px solid #d1d5db; border-top-color: var(--primary);
+    border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .target-list-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px 6px; font-size: 12px; font-weight: 600; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+  .btn-icon {
+    border: none; background: none; color: var(--text-3); font-size: 15px;
+    padding: 2px 6px; border-radius: 6px; line-height: 1;
+  }
+  .btn-icon:hover { background: #f3f4f6; color: var(--text); }
+  #target-list { flex: 1; overflow-y: auto; padding: 4px 10px 16px; }
+  .target-empty { color: var(--text-3); font-size: 12px; padding: 12px 8px; }
+  .target-item {
+    padding: 10px 12px; border-radius: 8px; cursor: pointer; margin-bottom: 2px;
+    border: 1px solid transparent;
+  }
+  .target-item:hover { background: #f3f4f6; }
+  .target-item.active { background: var(--primary-light); border-color: #bfdbfe; }
+  .target-item .row1 { display: flex; align-items: center; gap: 6px; }
+  .target-item .addr {
+    font-size: 13px; font-weight: 600; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+  .target-item .row2 { font-size: 11px; color: var(--text-3); margin-top: 3px; }
+
+  .sidebar-footer { border-top: 1px solid var(--border); padding: 12px 16px; }
+  .user-row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+  .user-name {
+    flex: 1; font-size: 13px; font-weight: 600; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .role-badge { font-size: 11px; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .role-badge.admin { background: #fef3c7; color: #92400e; }
+  .role-badge.user { background: #f3f4f6; color: var(--text-2); }
+  .footer-btns { display: flex; gap: 8px; }
+  .btn-small {
+    flex: 1; padding: 6px 0; font-size: 12px; border: 1px solid #d1d5db;
+    border-radius: 7px; background: #fff; color: #4b5563;
+  }
+  .btn-small:hover { background: #f9fafb; border-color: #9ca3af; }
+
+  /* ---------- 主区 ---------- */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  #error-banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--red-bg); border-bottom: 1px solid var(--red-border);
+    color: var(--red); padding: 10px 24px; font-size: 13px;
+  }
+  #error-close { border: none; background: none; color: var(--red); font-size: 17px; padding: 0 4px; }
+
+  #empty-state {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; color: var(--text-3); text-align: center; padding: 24px;
+  }
+  #empty-state .icon { font-size: 44px; margin-bottom: 14px; }
+  #empty-state h2 { font-size: 17px; color: var(--text-2); font-weight: 600; margin-bottom: 8px; }
+  #empty-state p { font-size: 13px; line-height: 1.8; }
+
+  #workspace { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #ws-header {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+    padding: 18px 24px 0; flex-wrap: wrap;
+  }
+  #ws-header h1 { font-size: 19px; font-weight: 700; word-break: break-all; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .chip {
+    font-size: 12px; color: var(--text-2); background: #fff; border: 1px solid var(--border);
+    border-radius: 999px; padding: 3px 11px;
+  }
+  .ws-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .btn-ghost {
+    padding: 7px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px;
+    background: #fff; color: #4b5563;
+  }
+  .btn-ghost:hover { background: #f9fafb; border-color: #9ca3af; }
+  .btn-ghost:disabled { color: var(--text-3); cursor: not-allowed; }
+
+  #tabs { display: flex; gap: 4px; padding: 14px 24px 0; border-bottom: 1px solid var(--border); }
+  .tab {
+    border: none; background: none; font-size: 13.5px; color: var(--text-2);
+    padding: 8px 14px 10px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+
+  .tab-pane { flex: 1; overflow-y: auto; padding: 20px 24px 48px; }
+
+  /* 报告 */
+  .markdown-body { font-size: 14px; line-height: 1.75; max-width: 860px; }
+  .markdown-body h1, .markdown-body h2, .markdown-body h3 { margin: 18px 0 8px; line-height: 1.4; }
+  .markdown-body p { margin: 8px 0; }
+  .markdown-body ul, .markdown-body ol { padding-left: 22px; margin: 8px 0; }
+  .markdown-body code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  .markdown-body pre { background: #f3f4f6; padding: 12px; border-radius: 8px; overflow-x: auto; }
+  .markdown-body blockquote { border-left: 3px solid #d1d5db; padding-left: 12px; color: var(--text-2); margin: 8px 0; }
+  .markdown-body table { border-collapse: collapse; margin: 8px 0; }
+  .markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: 6px 10px; }
+  .markdown-body a { color: var(--primary); }
+  .pane-empty { color: var(--text-3); font-size: 13px; padding: 32px 0; text-align: center; }
+
+  /* 报告版本工具栏 */
+  .report-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  .report-toolbar select {
+    padding: 7px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px;
+    outline: none; background: #fff; max-width: 100%;
+  }
+  .report-toolbar select:focus {
+    border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+  }
+  .report-toolbar .btn-primary { width: auto; padding: 7px 18px; }
+  .report-hint { font-size: 12.5px; }
+  .report-hint.ok { color: var(--green); }
+  .report-hint.err { color: var(--red); }
+
+  /* 邮件表格 */
+  .mail-filter { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .mail-filter select, .mail-filter input {
+    padding: 7px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px;
+    outline: none; background: #fff;
+  }
+  .mail-filter input { flex: 1; min-width: 180px; }
+  .mail-filter select:focus, .mail-filter input:focus {
+    border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+  }
+  .mail-count { font-size: 12px; color: var(--text-3); margin-bottom: 8px; }
+  .mail-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  .mail-table th {
+    text-align: left; font-size: 12px; color: var(--text-3); font-weight: 600;
+    padding: 10px 12px; background: #f9fafb; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  .mail-table td { padding: 10px 12px; border-bottom: 1px solid #f3f4f6; font-size: 13px; vertical-align: top; }
+  .mail-table tbody tr { cursor: pointer; }
+  .mail-table tbody tr:hover { background: #f9fafb; }
+  .mail-table tbody tr:last-child td { border-bottom: none; }
+  .mail-subject { font-weight: 600; max-width: 300px; }
+  .mail-preview { color: var(--text-3); font-size: 12px; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mail-peer { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+  .mail-date { white-space: nowrap; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .badge {
+    display: inline-block; font-size: 11px; padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+  }
+  .badge.in { background: var(--primary-light); color: var(--primary); }
+  .badge.out { background: var(--green-light); color: var(--green); }
+
+  /* 弹层通用 */
+  .modal-mask {
+    position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 50;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .modal {
+    background: #fff; border-radius: 12px; width: 720px; max-width: 100%;
+    max-height: 85vh; display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0,0,0,.2);
+  }
+  .modal-head {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .modal-head h3 { font-size: 15px; font-weight: 700; word-break: break-all; }
+  .modal-close { border: none; background: none; font-size: 20px; color: var(--text-3); padding: 0 4px; line-height: 1; }
+  .modal-close:hover { color: var(--text); }
+  .modal-meta { padding: 10px 20px; font-size: 12.5px; color: var(--text-2); border-bottom: 1px solid var(--border); line-height: 1.9; }
+  .modal-body { padding: 16px 20px; overflow-y: auto; font-size: 13.5px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; }
+
+  /* 用户管理弹层 */
+  .users-add { display: flex; gap: 8px; flex-wrap: wrap; }
+  .users-add input, .users-add select {
+    padding: 7px 11px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px;
+    outline: none; background: #fff;
+  }
+  .users-add input:focus, .users-add select:focus {
+    border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+  }
+  .users-add input { flex: 1; min-width: 120px; }
+  .users-add .btn-primary { width: auto; padding: 7px 18px; }
+  .users-error { color: var(--red); font-size: 12.5px; margin-top: 8px; min-height: 1em; }
+  .users-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  .users-table th {
+    text-align: left; font-size: 12px; color: var(--text-3); font-weight: 600;
+    padding: 8px 10px; background: #f9fafb; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  .users-table td { padding: 9px 10px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  .users-table tr:last-child td { border-bottom: none; }
+  .link-btn { border: none; background: none; color: var(--primary); font-size: 12.5px; padding: 2px 5px; }
+  .link-btn:hover { text-decoration: underline; }
+  .link-btn.danger { color: var(--red); }
+
+  /* 聊天气泡 */
+  .chat-wrap { max-width: 860px; display: flex; flex-direction: column; height: 100%; }
+  .chat-log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; min-height: 200px; }
+  .msg { max-width: 82%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.7; }
+  .msg.user { align-self: flex-end; background: var(--primary); color: #fff; white-space: pre-wrap; border-bottom-right-radius: 4px; }
+  .msg.user code { background: rgba(255,255,255,.2); }
+  .msg.assistant { align-self: flex-start; background: #fff; border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .msg.assistant p { margin: 6px 0; }
+  .msg.assistant ul, .msg.assistant ol { padding-left: 20px; margin: 6px 0; }
+  .msg.assistant pre { background: #f3f4f6; padding: 10px; border-radius: 8px; overflow-x: auto; }
+  .msg.assistant code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  .msg.assistant h1, .msg.assistant h2, .msg.assistant h3 { margin: 10px 0 6px; font-size: 15px; }
+  .msg.assistant blockquote { border-left: 3px solid #d1d5db; padding-left: 10px; color: var(--text-2); margin: 6px 0; }
+  .msg.assistant table { border-collapse: collapse; margin: 6px 0; }
+  .msg.assistant th, .msg.assistant td { border: 1px solid var(--border); padding: 4px 8px; }
+  .chat-input-row { display: flex; gap: 10px; padding-top: 4px; }
+  .chat-input-row input {
+    flex: 1; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: 14px; outline: none; background: #fff;
+  }
+  .chat-input-row input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+  .chat-input-row button {
+    padding: 10px 22px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+    background: var(--primary); color: #fff;
+  }
+  .chat-input-row button:hover { background: var(--primary-dark); }
+  .chat-input-row button:disabled { background: #93c5fd; cursor: not-allowed; }
+  .chat-notice {
+    background: #fffbeb; border: 1px solid #fde68a; color: #92400e;
+    border-radius: 10px; padding: 14px 18px; font-size: 13px; max-width: 860px;
+  }
+
+  /* 历史记录 */
+  .session-block { max-width: 860px; margin-bottom: 28px; }
+  .session-title {
+    font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .session-title::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .session-msgs { display: flex; flex-direction: column; gap: 12px; }
+
+  /* 响应式：窄屏时侧边栏折叠为顶部栏 */
+  @media (max-width: 860px) {
+    #app { flex-direction: column; height: auto; min-height: 100vh; }
+    #sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: none; }
+    #target-list { max-height: 180px; }
+    #main { overflow: visible; }
+    #workspace, .tab-pane { overflow: visible; }
+    #ws-header { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div id="login-view" class="hidden">
+  <div class="login-card">
+    <div class="login-title">邮件分析助手</div>
+    <div class="login-sub">IMAP 抓取 · AI 分析 · 会话追问</div>
+    <div id="login-error" class="login-error hidden"></div>
+    <input type="text" id="login-username" placeholder="用户名" autocomplete="username">
+    <input type="password" id="login-password" placeholder="密码" autocomplete="current-password">
+    <button id="login-btn" class="btn-primary">登 录</button>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <aside id="sidebar">
+    <div class="brand">
+      <div class="brand-name">邮件分析助手</div>
+      <div class="brand-sub">IMAP 抓取 · AI 分析 · 会话追问</div>
+    </div>
+    <div class="analyze-box">
+      <input type="email" id="email-input" placeholder="输入要分析的邮箱地址">
+      <button id="analyze-btn" class="btn-primary">开始分析</button>
+      <div id="progress" class="progress hidden">
+        <div class="spinner"></div>
+        <span id="progress-text">正在抓取邮件…</span>
+      </div>
+    </div>
+    <div class="target-list-head">
+      <span>分析目标</span>
+      <button id="refresh-targets" class="btn-icon" title="刷新列表">⟳</button>
+    </div>
+    <div id="target-list"></div>
+    <div class="sidebar-footer">
+      <div class="user-row">
+        <span class="user-name" id="user-name"></span>
+        <span class="role-badge" id="user-role"></span>
+      </div>
+      <div class="footer-btns">
+        <button id="users-btn" class="btn-small hidden">用户管理</button>
+        <button id="logout-btn" class="btn-small">退出登录</button>
+      </div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div id="error-banner" class="hidden">
+      <span id="error-text"></span>
+      <button id="error-close" title="关闭">×</button>
+    </div>
+
+    <div id="empty-state">
+      <div class="icon">📬</div>
+      <h2>开始一次邮件分析</h2>
+      <p>在左侧输入对方邮箱地址并点击「开始分析」，<br>或从目标列表中选择已分析过的邮箱。</p>
+    </div>
+
+    <div id="workspace" class="hidden">
+      <header id="ws-header">
+        <div>
+          <h1 id="ws-target"></h1>
+          <div id="ws-chips" class="chips"></div>
+        </div>
+        <div class="ws-actions">
+          <button id="reanalyze-btn" class="btn-ghost">重新分析</button>
+          <button id="reset-btn" class="btn-ghost">重置会话</button>
+          <button id="export-btn" class="btn-ghost">导出报告</button>
+        </div>
+      </header>
+
+      <nav id="tabs">
+        <button class="tab active" data-tab="report">分析报告</button>
+        <button class="tab" data-tab="emails">往来邮件</button>
+        <button class="tab" data-tab="chat">对话追问</button>
+        <button class="tab" data-tab="history">历史记录</button>
+      </nav>
+
+      <section id="tab-report" class="tab-pane">
+        <div class="report-toolbar">
+          <select id="report-version" class="hidden"></select>
+          <button id="new-report-btn" class="btn-primary">生成新报告</button>
+          <span id="report-hint" class="report-hint"></span>
+        </div>
+        <div id="report-content"></div>
+      </section>
+
+      <section id="tab-emails" class="tab-pane hidden">
+        <div class="mail-filter">
+          <select id="mail-direction">
+            <option value="">全部方向</option>
+            <option value="收到">收到</option>
+            <option value="发出">发送</option>
+          </select>
+          <input type="text" id="mail-keyword" placeholder="搜索主题 / 收发人 / 预览…">
+        </div>
+        <div class="mail-count" id="mail-count"></div>
+        <div id="mail-table-wrap"></div>
+      </section>
+
+      <section id="tab-chat" class="tab-pane hidden">
+        <div id="chat-notice" class="chat-notice hidden">该邮箱暂无进行中的会话，发起分析后可追问。</div>
+        <div id="chat-area" class="chat-wrap hidden">
+          <div id="chat-log" class="chat-log"></div>
+          <div class="chat-input-row">
+            <input type="text" id="chat-input" placeholder="围绕这些邮件继续提问，例如：上次报价是多少？">
+            <button id="chat-send">发送</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-history" class="tab-pane hidden">
+        <div id="history-content"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div id="email-modal-mask" class="modal-mask hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modal-subject"></h3>
+      <button class="modal-close" id="modal-close" title="关闭">×</button>
+    </div>
+    <div class="modal-meta" id="modal-meta"></div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<div id="users-modal-mask" class="modal-mask hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>用户管理</h3>
+      <button class="modal-close" id="users-close" title="关闭">×</button>
+    </div>
+    <div class="modal-body" style="white-space: normal;">
+      <div class="users-add">
+        <input type="text" id="add-username" placeholder="用户名（2-32 位）" autocomplete="off">
+        <input type="password" id="add-password" placeholder="密码（至少 6 位）" autocomplete="new-password">
+        <select id="add-role">
+          <option value="user">普通用户</option>
+          <option value="admin">管理员</option>
+        </select>
+        <button id="add-user-btn" class="btn-primary">添加</button>
+      </div>
+      <div id="users-error" class="users-error"></div>
+      <div id="users-table-wrap"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+
+const el = {
+  loginView: $("login-view"), loginUsername: $("login-username"),
+  loginPassword: $("login-password"), loginBtn: $("login-btn"), loginError: $("login-error"),
+  app: $("app"),
+  userName: $("user-name"), userRole: $("user-role"),
+  usersBtn: $("users-btn"), logoutBtn: $("logout-btn"),
+  emailInput: $("email-input"), analyzeBtn: $("analyze-btn"),
+  progress: $("progress"), progressText: $("progress-text"),
+  targetList: $("target-list"), refreshTargets: $("refresh-targets"),
+  errorBanner: $("error-banner"), errorText: $("error-text"), errorClose: $("error-close"),
+  emptyState: $("empty-state"), workspace: $("workspace"),
+  wsTarget: $("ws-target"), wsChips: $("ws-chips"),
+  reanalyzeBtn: $("reanalyze-btn"), resetBtn: $("reset-btn"), exportBtn: $("export-btn"),
+  tabs: document.querySelectorAll("#tabs .tab"),
+  panes: {
+    report: $("tab-report"), emails: $("tab-emails"),
+    chat: $("tab-chat"), history: $("tab-history"),
+  },
+  reportContent: $("report-content"), reportVersion: $("report-version"),
+  newReportBtn: $("new-report-btn"), reportHint: $("report-hint"),
+  mailDirection: $("mail-direction"), mailKeyword: $("mail-keyword"),
+  mailCount: $("mail-count"), mailTableWrap: $("mail-table-wrap"),
+  chatNotice: $("chat-notice"), chatArea: $("chat-area"),
+  chatLog: $("chat-log"), chatInput: $("chat-input"), chatSend: $("chat-send"),
+  historyContent: $("history-content"),
+  modalMask: $("email-modal-mask"), modalSubject: $("modal-subject"),
+  modalMeta: $("modal-meta"), modalBody: $("modal-body"), modalClose: $("modal-close"),
+  usersMask: $("users-modal-mask"), usersClose: $("users-close"),
+  addUsername: $("add-username"), addPassword: $("add-password"),
+  addRole: $("add-role"), addUserBtn: $("add-user-btn"),
+  usersError: $("users-error"), usersTableWrap: $("users-table-wrap"),
+};
+
+const state = {
+  me: null,           // 当前登录用户 {username, role}
+  target: null,
+  targets: [],
+  tab: "report",
+  reports: null,      // 当前目标的报告版本列表 [{version, time, content}]
+  currentVersion: null, // 当前选中的报告版本号
+  emails: null,       // 当前目标的邮件列表缓存
+  sessions: null,     // 当前目标的历史会话缓存
+  hasSession: false,
+  analyzing: false,
+  pollTimer: null,
+};
+
+function targetKey() {
+  return "zemail:lastTarget:" + (state.me ? state.me.username : "");
+}
+
+// ---------- 通用工具 ----------
+
+async function fetchJson(url, options) {
+  const resp = await fetch(url, options);
+  const contentType = resp.headers.get("Content-Type") || "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(`服务异常（HTTP ${resp.status}），请确认服务已重启`);
+  }
+  const data = await resp.json();
+  if (resp.status === 401 && url !== "/api/login") showLogin();
+  return { ok: resp.ok, status: resp.status, data };
+}
+
+function showError(msg) {
+  if (!msg) { el.errorBanner.classList.add("hidden"); return; }
+  el.errorText.textContent = msg;
+  el.errorBanner.classList.remove("hidden");
+}
+
+function renderMarkdown(node, text) {
+  if (window.marked) {
+    node.classList.add("markdown-body");
+    node.innerHTML = marked.parse(text || "");
+  } else {
+    node.style.whiteSpace = "pre-wrap";
+    node.textContent = text || "";
+  }
+}
+
+function fmtTime(iso) {
+  return String(iso || "").replace("T", " ").slice(0, 19);
+}
+
+function fmtShort(iso) {
+  return String(iso || "").replace("T", " ").slice(0, 16);
+}
+
+// ---------- 登录 / 登出 ----------
+
+function showLogin(msg) {
+  if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+  state.me = null;
+  state.target = null;
+  state.targets = [];
+  state.analyzing = false;
+  el.app.classList.add("hidden");
+  el.loginView.classList.remove("hidden");
+  el.loginError.classList.toggle("hidden", !msg);
+  el.loginError.textContent = msg || "";
+  el.loginPassword.value = "";
+  el.loginUsername.focus();
+}
+
+function showMain(user) {
+  state.me = user;
+  el.loginView.classList.add("hidden");
+  el.app.classList.remove("hidden");
+  el.userName.textContent = user.username;
+  el.userName.title = user.username;
+  const isAdmin = user.role === "admin";
+  el.userRole.textContent = isAdmin ? "管理员" : "普通用户";
+  el.userRole.className = "role-badge " + (isAdmin ? "admin" : "user");
+  el.usersBtn.classList.toggle("hidden", !isAdmin);
+  loadTargets().then(() => {
+    const saved = localStorage.getItem(targetKey());
+    if (saved && state.targets.some((t) => t.target === saved)) {
+      selectTarget(saved);
+    }
+  });
+}
+
+async function doLogin() {
+  const username = el.loginUsername.value.trim();
+  const password = el.loginPassword.value;
+  if (!username || !password) {
+    el.loginError.textContent = "请输入用户名和密码";
+    el.loginError.classList.remove("hidden");
+    return;
+  }
+  el.loginBtn.disabled = true;
+  el.loginError.classList.add("hidden");
+  try {
+    const { ok, data } = await fetchJson("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    if (ok) {
+      showMain(data);
+    } else {
+      el.loginError.textContent = data.error || "登录失败";
+      el.loginError.classList.remove("hidden");
+    }
+  } catch (e) {
+    el.loginError.textContent = e.message;
+    el.loginError.classList.remove("hidden");
+  } finally {
+    el.loginBtn.disabled = false;
+  }
+}
+
+el.loginBtn.addEventListener("click", doLogin);
+el.loginUsername.addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+el.loginPassword.addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+
+el.logoutBtn.addEventListener("click", async () => {
+  try { await fetchJson("/api/logout", { method: "POST" }); } catch (e) { /* 忽略 */ }
+  showLogin();
+});
+
+// ---------- 用户管理（admin） ----------
+
+function usersShowError(msg) { el.usersError.textContent = msg || ""; }
+
+function openUsersModal() {
+  usersShowError("");
+  el.usersMask.classList.remove("hidden");
+  loadUsers();
+}
+
+function closeUsersModal() { el.usersMask.classList.add("hidden"); }
+el.usersBtn.addEventListener("click", openUsersModal);
+el.usersClose.addEventListener("click", closeUsersModal);
+el.usersMask.addEventListener("click", (e) => { if (e.target === el.usersMask) closeUsersModal(); });
+
+async function loadUsers() {
+  try {
+    const { ok, data } = await fetchJson("/api/users");
+    if (!ok) { usersShowError(data.error || "用户列表加载失败"); return; }
+    renderUsers(data.users || []);
+  } catch (e) {
+    usersShowError(e.message);
+  }
+}
+
+function renderUsers(users) {
+  const wrap = el.usersTableWrap;
+  wrap.innerHTML = "";
+  if (!users.length) {
+    wrap.innerHTML = '<div class="pane-empty">暂无用户</div>';
+    return;
+  }
+  const table = document.createElement("table");
+  table.className = "users-table";
+  table.innerHTML = "<thead><tr><th>用户名</th><th>角色</th><th>创建时间</th><th>操作</th></tr></thead>";
+  const tbody = document.createElement("tbody");
+  for (const u of users) {
+    const tr = document.createElement("tr");
+
+    const tdName = document.createElement("td");
+    tdName.textContent = u.username;
+    tdName.style.fontWeight = "600";
+
+    const tdRole = document.createElement("td");
+    const badge = document.createElement("span");
+    const isAdmin = u.role === "admin";
+    badge.className = "role-badge " + (isAdmin ? "admin" : "user");
+    badge.textContent = isAdmin ? "管理员" : "普通用户";
+    tdRole.appendChild(badge);
+
+    const tdCreated = document.createElement("td");
+    tdCreated.textContent = fmtTime(u.created_at);
+    tdCreated.style.color = "var(--text-2)";
+
+    const tdOps = document.createElement("td");
+    tdOps.style.whiteSpace = "nowrap";
+
+    const btnPwd = document.createElement("button");
+    btnPwd.className = "link-btn";
+    btnPwd.textContent = "重置密码";
+    btnPwd.addEventListener("click", () => resetUserPassword(u.username));
+
+    const btnRole = document.createElement("button");
+    btnRole.className = "link-btn";
+    btnRole.textContent = isAdmin ? "设为普通用户" : "设为管理员";
+    btnRole.addEventListener("click", () => toggleUserRole(u.username, u.role));
+
+    const btnDel = document.createElement("button");
+    btnDel.className = "link-btn danger";
+    btnDel.textContent = "删除";
+    btnDel.addEventListener("click", () => deleteUser(u.username));
+
+    tdOps.append(btnPwd, btnRole, btnDel);
+    tr.append(tdName, tdRole, tdCreated, tdOps);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+}
+
+async function addUser() {
+  const username = el.addUsername.value.trim();
+  const password = el.addPassword.value;
+  const role = el.addRole.value;
+  usersShowError("");
+  try {
+    const { ok, data } = await fetchJson("/api/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, role }),
+    });
+    if (!ok) { usersShowError(data.error || "添加失败"); return; }
+    el.addUsername.value = "";
+    el.addPassword.value = "";
+    loadUsers();
+  } catch (e) {
+    usersShowError(e.message);
+  }
+}
+
+el.addUserBtn.addEventListener("click", addUser);
+
+async function resetUserPassword(username) {
+  const password = prompt(`为用户「${username}」设置新密码（至少 6 位）：`);
+  if (password === null) return;
+  usersShowError("");
+  try {
+    const { ok, data } = await fetchJson(
+      "/api/users/" + encodeURIComponent(username) + "/password",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      }
+    );
+    if (!ok) { usersShowError(data.error || "重置密码失败"); return; }
+    loadUsers();
+  } catch (e) {
+    usersShowError(e.message);
+  }
+}
+
+async function toggleUserRole(username, currentRole) {
+  const role = currentRole === "admin" ? "user" : "admin";
+  usersShowError("");
+  try {
+    const { ok, data } = await fetchJson(
+      "/api/users/" + encodeURIComponent(username) + "/role",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      }
+    );
+    if (!ok) { usersShowError(data.error || "修改角色失败"); return; }
+    loadUsers();
+  } catch (e) {
+    usersShowError(e.message);
+  }
+}
+
+async function deleteUser(username) {
+  if (!confirm(`确定要删除用户「${username}」吗？该操作不可恢复。`)) return;
+  usersShowError("");
+  try {
+    const { ok, data } = await fetchJson(
+      "/api/users/" + encodeURIComponent(username),
+      { method: "DELETE" }
+    );
+    if (!ok) { usersShowError(data.error || "删除失败"); return; }
+    loadUsers();
+  } catch (e) {
+    usersShowError(e.message);
+  }
+}
+
+// ---------- 侧边栏目标列表 ----------
+
+async function loadTargets() {
+  try {
+    const { data } = await fetchJson("/api/targets");
+    state.targets = data.targets || [];
+    renderTargets();
+  } catch (e) {
+    el.targetList.innerHTML = "";
+    const div = document.createElement("div");
+    div.className = "target-empty";
+    div.textContent = "目标列表加载失败：" + e.message;
+    el.targetList.appendChild(div);
+  }
+}
+
+function renderTargets() {
+  el.targetList.innerHTML = "";
+  if (!state.targets.length) {
+    const div = document.createElement("div");
+    div.className = "target-empty";
+    div.textContent = "暂无分析过的邮箱";
+    el.targetList.appendChild(div);
+    return;
+  }
+  for (const t of state.targets) {
+    const item = document.createElement("div");
+    item.className = "target-item" + (t.target === state.target ? " active" : "");
+
+    const row1 = document.createElement("div");
+    row1.className = "row1";
+    if (t.has_session) {
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      dot.title = "有进行中的会话";
+      row1.appendChild(dot);
+    }
+    const addr = document.createElement("span");
+    addr.className = "addr";
+    addr.textContent = t.target;
+    addr.title = t.target;
+    row1.appendChild(addr);
+
+    const row2 = document.createElement("div");
+    row2.className = "row2";
+    row2.textContent = `${t.email_count} 封邮件 · ${t.sessions} 次会话 · ${fmtTime(t.updated)}`;
+
+    item.appendChild(row1);
+    item.appendChild(row2);
+    item.addEventListener("click", () => selectTarget(t.target));
+    el.targetList.appendChild(item);
+  }
+}
+
+// ---------- 目标选中与工作区 ----------
+
+async function selectTarget(target, opts) {
+  opts = opts || {};
+  state.target = target;
+  state.reports = null;
+  state.currentVersion = null;
+  state.emails = null;
+  state.sessions = null;
+  localStorage.setItem(targetKey(), target);
+
+  const info = state.targets.find((t) => t.target === target);
+  state.hasSession = info ? !!info.has_session : false;
+
+  el.emptyState.classList.add("hidden");
+  el.workspace.classList.remove("hidden");
+  el.wsTarget.textContent = target;
+  el.wsChips.innerHTML = "";
+  renderTargets();
+  showError("");
+
+  if (!opts.keepTab) switchTab("report");
+
+  await Promise.all([loadReports(), loadEmails(), loadHistory()]);
+  renderReport();
+  renderChatEntry();
+}
+
+function addChip(text) {
+  const chip = document.createElement("span");
+  chip.className = "chip";
+  chip.textContent = text;
+  el.wsChips.appendChild(chip);
+}
+
+function refreshChips() {
+  el.wsChips.innerHTML = "";
+  const emails = state.emails || [];
+  const received = emails.filter((m) => m.direction === "收到").length;
+  const sent = emails.filter((m) => m.direction === "发出").length;
+  addChip(`共 ${emails.length} 封`);
+  addChip(`收到 ${received} / 发送 ${sent}`);
+  if (emails.length) {
+    const first = fmtShort(emails[0].date);
+    const last = fmtShort(emails[emails.length - 1].date);
+    addChip(first === last ? first : `${first} ~ ${last}`);
+  }
+}
+
+// ---------- 标签页 ----------
+
+function switchTab(name) {
+  state.tab = name;
+  el.tabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === name));
+  for (const key of Object.keys(el.panes)) {
+    el.panes[key].classList.toggle("hidden", key !== name);
+  }
+  if (name === "report") renderReport();
+  if (name === "emails") renderMailTable();
+  if (name === "chat") renderChatEntry();
+  if (name === "history") renderHistory();
+}
+
+el.tabs.forEach((tab) => {
+  tab.addEventListener("click", () => switchTab(tab.dataset.tab));
+});
+
+// ---------- 分析报告（版本化） ----------
+
+async function loadReports() {
+  if (!state.target) return;
+  try {
+    const { data } = await fetchJson("/api/reports/" + encodeURIComponent(state.target));
+    state.reports = data.reports || [];
+    // 默认选中最高版本；若当前选中版本仍存在则保留
+    const versions = state.reports.map((r) => r.version);
+    if (!versions.includes(state.currentVersion)) {
+      state.currentVersion = versions.length ? versions[versions.length - 1] : null;
+    }
+  } catch (e) {
+    state.reports = [];
+    showError("报告版本加载失败：" + e.message);
+  }
+}
+
+function renderReport() {
+  const reports = state.reports || [];
+  el.reportVersion.innerHTML = "";
+  el.reportVersion.classList.toggle("hidden", !reports.length);
+  el.reportContent.innerHTML = "";
+  if (!reports.length) {
+    const div = document.createElement("div");
+    div.className = "pane-empty";
+    div.textContent = "尚未分析，点击左上角「开始分析」生成报告。";
+    el.reportContent.appendChild(div);
+    return;
+  }
+  for (const r of reports) {
+    const opt = document.createElement("option");
+    opt.value = String(r.version);
+    opt.textContent = `v${r.version} · ${fmtShort(r.time)}`;
+    el.reportVersion.appendChild(opt);
+  }
+  el.reportVersion.value = String(state.currentVersion);
+  const current = reports.find((r) => r.version === state.currentVersion) || reports[reports.length - 1];
+  const div = document.createElement("div");
+  renderMarkdown(div, current.content);
+  el.reportContent.appendChild(div);
+}
+
+el.reportVersion.addEventListener("change", () => {
+  state.currentVersion = Number(el.reportVersion.value);
+  reportHint("");
+  renderReport();
+});
+
+function reportHint(msg, isErr) {
+  el.reportHint.textContent = msg || "";
+  el.reportHint.className = "report-hint" + (msg ? (isErr ? " err" : " ok") : "");
+}
+
+el.newReportBtn.addEventListener("click", async () => {
+  if (!state.target) return;
+  el.newReportBtn.disabled = true;
+  el.newReportBtn.textContent = "生成中…";
+  reportHint("");
+  try {
+    const { ok, status, data } = await fetchJson("/api/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: state.target }),
+    });
+    if (ok) {
+      await loadReports();
+      state.currentVersion = data.version;
+      renderReport();
+      reportHint(`已生成 v${data.version}`);
+    } else if (status === 409) {
+      reportHint(data.error || "该邮箱暂无进行中的会话，请先发起分析", true);
+    } else {
+      showError(data.error || "生成报告失败");
+    }
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    el.newReportBtn.disabled = false;
+    el.newReportBtn.textContent = "生成新报告";
+  }
+});
+
+// ---------- 往来邮件 ----------
+
+async function loadEmails() {
+  if (!state.target) return;
+  try {
+    const { data } = await fetchJson("/api/emails/" + encodeURIComponent(state.target));
+    state.emails = data.emails || [];
+    refreshChips();
+    if (state.tab === "emails") renderMailTable();
+  } catch (e) {
+    showError("邮件列表加载失败：" + e.message);
+  }
+}
+
+function filteredEmails() {
+  const dir = el.mailDirection.value;
+  const kw = el.mailKeyword.value.trim().toLowerCase();
+  return (state.emails || []).filter((m) => {
+    if (dir && m.direction !== dir) return false;
+    if (!kw) return true;
+    return [m.subject, m.from_addr, m.to_addrs, m.preview]
+      .some((s) => String(s || "").toLowerCase().includes(kw));
+  });
+}
+
+function renderMailTable() {
+  const wrap = el.mailTableWrap;
+  wrap.innerHTML = "";
+  if (state.emails === null) {
+    wrap.innerHTML = '<div class="pane-empty">加载中…</div>';
+    el.mailCount.textContent = "";
+    return;
+  }
+  const list = filteredEmails();
+  el.mailCount.textContent = `共 ${state.emails.length} 封，当前显示 ${list.length} 封`;
+  if (!list.length) {
+    wrap.innerHTML = '<div class="pane-empty">没有匹配的邮件</div>';
+    return;
+  }
+  const table = document.createElement("table");
+  table.className = "mail-table";
+  table.innerHTML = "<thead><tr><th>日期</th><th>方向</th><th>主题</th><th>对方</th><th>预览</th></tr></thead>";
+  const tbody = document.createElement("tbody");
+  for (const m of list) {
+    const tr = document.createElement("tr");
+
+    const tdDate = document.createElement("td");
+    tdDate.className = "mail-date";
+    tdDate.textContent = fmtShort(m.date);
+
+    const tdDir = document.createElement("td");
+    const badge = document.createElement("span");
+    const isIn = m.direction === "收到";
+    badge.className = "badge " + (isIn ? "in" : "out");
+    badge.textContent = isIn ? "收到" : "发送";
+    tdDir.appendChild(badge);
+
+    const tdSubject = document.createElement("td");
+    tdSubject.className = "mail-subject";
+    tdSubject.textContent = m.subject;
+
+    const tdPeer = document.createElement("td");
+    tdPeer.className = "mail-peer";
+    tdPeer.textContent = isIn ? m.from_addr : m.to_addrs;
+    tdPeer.title = tdPeer.textContent;
+
+    const tdPreview = document.createElement("td");
+    tdPreview.className = "mail-preview";
+    tdPreview.textContent = m.preview;
+    tdPreview.title = m.preview;
+
+    tr.append(tdDate, tdDir, tdSubject, tdPeer, tdPreview);
+    tr.addEventListener("click", () => openEmailModal(m.idx));
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+}
+
+el.mailDirection.addEventListener("change", renderMailTable);
+el.mailKeyword.addEventListener("input", renderMailTable);
+
+async function openEmailModal(idx) {
+  el.modalSubject.textContent = "加载中…";
+  el.modalMeta.textContent = "";
+  el.modalBody.textContent = "";
+  el.modalMask.classList.remove("hidden");
+  try {
+    const { ok, data } = await fetchJson(
+      "/api/emails/" + encodeURIComponent(state.target) + "/" + idx
+    );
+    if (!ok) {
+      el.modalSubject.textContent = "加载失败";
+      el.modalBody.textContent = data.error || "请求失败";
+      return;
+    }
+    el.modalSubject.textContent = data.subject;
+    el.modalMeta.textContent =
+      `${fmtTime(data.date)} · ${data.direction}\n发件人：${data.from_addr}\n收件人：${data.to_addrs}`;
+    el.modalBody.textContent = data.body || "(无正文)";
+  } catch (e) {
+    el.modalSubject.textContent = "加载失败";
+    el.modalBody.textContent = e.message;
+  }
+}
+
+function closeEmailModal() { el.modalMask.classList.add("hidden"); }
+el.modalClose.addEventListener("click", closeEmailModal);
+el.modalMask.addEventListener("click", (e) => { if (e.target === el.modalMask) closeEmailModal(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { closeEmailModal(); closeUsersModal(); }
+});
+
+// ---------- 对话追问 ----------
+
+function renderChatEntry() {
+  const canChat = state.hasSession;
+  el.chatNotice.classList.toggle("hidden", canChat);
+  el.chatArea.classList.toggle("hidden", !canChat);
+}
+
+function appendMsg(role, text) {
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  if (role === "assistant") {
+    renderMarkdown(div, text);
+  } else {
+    div.textContent = text;
+  }
+  el.chatLog.appendChild(div);
+  el.chatLog.scrollTop = el.chatLog.scrollHeight;
+  return div;
+}
+
+async function sendChat() {
+  const message = el.chatInput.value.trim();
+  if (!message || !state.target) return;
+  el.chatInput.value = "";
+  el.chatSend.disabled = true;
+  appendMsg("user", message);
+  const thinking = appendMsg("assistant", "正在思考…");
+  try {
+    const { ok, status, data } = await fetchJson("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: state.target, message }),
+    });
+    if (ok) {
+      thinking.innerHTML = "";
+      renderMarkdown(thinking, data.reply);
+    } else if (status === 409) {
+      thinking.classList.remove("markdown-body");
+      thinking.textContent = data.error || "该邮箱暂无进行中的会话，请先发起分析。";
+      state.hasSession = false;
+      renderChatEntry();
+    } else {
+      thinking.classList.remove("markdown-body");
+      thinking.textContent = "出错：" + (data.error || "请求失败");
+    }
+  } catch (e) {
+    thinking.classList.remove("markdown-body");
+    thinking.textContent = "出错：" + e.message;
+  } finally {
+    el.chatSend.disabled = false;
+    el.chatLog.scrollTop = el.chatLog.scrollHeight;
+    el.chatInput.focus();
+  }
+}
+
+el.chatSend.addEventListener("click", sendChat);
+el.chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });
+
+// ---------- 历史记录 ----------
+
+async function loadHistory() {
+  if (!state.target) return;
+  try {
+    const { data } = await fetchJson("/api/history/" + encodeURIComponent(state.target));
+    state.sessions = data.sessions || [];
+    if (state.tab === "history") renderHistory();
+  } catch (e) {
+    showError("历史记录加载失败：" + e.message);
+  }
+}
+
+function renderHistory() {
+  const wrap = el.historyContent;
+  wrap.innerHTML = "";
+  const sessions = state.sessions || [];
+  if (!sessions.length) {
+    wrap.innerHTML = '<div class="pane-empty">暂无历史记录</div>';
+    return;
+  }
+  sessions.forEach((sess, i) => {
+    const block = document.createElement("div");
+    block.className = "session-block";
+    const title = document.createElement("div");
+    title.className = "session-title";
+    title.textContent = `第 ${i + 1} 次分析 · ${fmtTime(sess.started_at)}`;
+    block.appendChild(title);
+    const msgs = document.createElement("div");
+    msgs.className = "session-msgs";
+    for (const m of sess.messages) {
+      const div = document.createElement("div");
+      div.className = "msg " + m.role;
+      if (m.role === "assistant") {
+        renderMarkdown(div, m.content);
+      } else {
+        div.textContent = m.content;
+      }
+      msgs.appendChild(div);
+    }
+    block.appendChild(msgs);
+    wrap.appendChild(block);
+  });
+}
+
+// ---------- 分析流程 ----------
+
+function setAnalyzing(on) {
+  state.analyzing = on;
+  el.analyzeBtn.disabled = on;
+  el.progress.classList.toggle("hidden", !on);
+}
+
+async function startAnalyze(emailOverride) {
+  const email = (emailOverride || el.emailInput.value).trim();
+  if (!email) { showError("请输入邮箱地址"); return; }
+  if (state.analyzing) return;
+  showError("");
+  setAnalyzing(true);
+  el.progressText.textContent = "正在抓取邮件…";
+  try {
+    const { ok, data } = await fetchJson("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!ok) {
+      showError(data.error || "分析请求失败");
+      setAnalyzing(false);
+      return;
+    }
+    pollJob(data.job_id, email);
+  } catch (e) {
+    showError(e.message);
+    setAnalyzing(false);
+  }
+}
+
+function pollJob(jobId, email) {
+  if (state.pollTimer) clearInterval(state.pollTimer);
+  state.pollTimer = setInterval(async () => {
+    try {
+      const { ok, data } = await fetchJson("/api/jobs/" + jobId);
+      if (!ok) { finishWithError(data.error || "任务查询失败"); return; }
+      if (data.status === "running" && data.stage === "llm") {
+        el.progressText.textContent =
+          `已抓取 ${data.count} 封（${data.date_range}），AI 分析中…`;
+      }
+      if (data.status === "done") {
+        clearInterval(state.pollTimer); state.pollTimer = null;
+        setAnalyzing(false);
+        const target = data.target || email;
+        await loadTargets();
+        await selectTarget(target);
+        await loadReports();
+        renderReport();
+        switchTab("report");
+      } else if (data.status === "error") {
+        finishWithError(data.error || "分析失败");
+      }
+    } catch (e) {
+      finishWithError(e.message);
+    }
+  }, 2000);
+}
+
+function finishWithError(msg) {
+  if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+  setAnalyzing(false);
+  showError(msg);
+}
+
+el.analyzeBtn.addEventListener("click", () => startAnalyze());
+el.emailInput.addEventListener("keydown", (e) => { if (e.key === "Enter") startAnalyze(); });
+el.refreshTargets.addEventListener("click", loadTargets);
+el.errorClose.addEventListener("click", () => showError(""));
+
+// ---------- 工作区操作 ----------
+
+el.reanalyzeBtn.addEventListener("click", () => {
+  if (state.target) {
+    el.emailInput.value = state.target;
+    startAnalyze(state.target);
+  }
+});
+
+el.resetBtn.addEventListener("click", async () => {
+  if (!state.target) return;
+  if (!confirm(`确定要重置与 ${state.target} 的会话吗？重置后需重新分析才能追问。`)) return;
+  try {
+    const { ok, data } = await fetchJson("/api/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: state.target }),
+    });
+    if (!ok) { showError(data.error || "重置失败"); return; }
+    state.hasSession = false;
+    el.chatLog.innerHTML = "";
+    renderChatEntry();
+    loadTargets();
+  } catch (e) {
+    showError(e.message);
+  }
+});
+
+el.exportBtn.addEventListener("click", () => {
+  if (!state.target) return;
+  const a = document.createElement("a");
+  a.href = "/api/export/" + encodeURIComponent(state.target);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+
+// ---------- 启动 ----------
+
+(async function init() {
+  try {
+    const { ok, data } = await fetchJson("/api/me");
+    if (ok) { showMain(data); return; }
+  } catch (e) { /* 服务异常时退回登录页 */ }
+  showLogin();
+})();
+</script>
+</body>
+</html>

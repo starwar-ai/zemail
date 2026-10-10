@@ -160,6 +160,42 @@ def extract_html(msg, html_chars: int = 200_000) -> str:
     return html
 
 
+# ---------- 正文清洗：剥离回复引用链与签名 ----------
+
+# 引用分隔标记：命中的行及其之后的内容视为历史引用，整段丢弃
+_QUOTE_CUT_RES = [
+    re.compile(r"^-{2,}\s*Original Message\s*-{2,}\s*$", re.I),
+    re.compile(r"^-{2,}\s*原始(邮件|消息|信息)\s*-{2,}\s*$"),
+    re.compile(r"^On .{0,120}wrote:?\s*$", re.I),        # On ... wrote:
+    re.compile(r"^在 .{0,80}写道[:：]?\s*$"),             # 在 ... 写道：
+    re.compile(r"^_{5,}\s*$"),                            # Outlook 分隔线
+]
+# Outlook 式回复头：连续的「发件人:/发送时间:/收件人:/主题:」（From/Sent/To/Subject）行块
+_REPLY_HEADER_RE = re.compile(r"^(发件人|发送时间|收件人|主题|From|Sent|To|Subject)\s*[:：]", re.I)
+
+
+def strip_quotes(text: str) -> str:
+    """剥离回复邮件里引用的历史原文与签名，只保留本次新写的内容。
+
+    误判兜底：整封内容都被剥掉时返回原文。
+    """
+    if not text:
+        return text
+    src = text.split("\n")
+    for i, line in enumerate(src):
+        s = line.strip()
+        if any(r.match(s) for r in _QUOTE_CUT_RES) or s == "--":
+            break  # 引用/签名分隔标记之后全是历史内容
+        if _REPLY_HEADER_RE.match(s) and \
+                any(_REPLY_HEADER_RE.match(src[j].strip())
+                    for j in range(i + 1, min(i + 4, len(src)))):
+            break  # 回复头块（发件人/发送时间等连续出现）起即引用历史
+    else:
+        i = len(src)
+    kept = [l for l in src[:i] if not l.strip().startswith(">")]
+    return _normalize("\n".join(kept)) or text
+
+
 def extract_attachment_names(msg) -> list:
     """收集附件文件名（只记录名字，不下载内容）。"""
     names = []
@@ -215,7 +251,7 @@ def parse_raw_email(raw: bytes, own_addr: str, target: str, body_chars: int = 20
     except Exception:
         date = dt.datetime.min
     direction = "发出" if own_addr and own_addr.lower() in from_addr.lower() else "收到"
-    body = extract_text(msg)
+    body = strip_quotes(extract_text(msg))
     if len(body) > body_chars:
         body = body[:body_chars] + " …(正文过长已截断)"
     return EmailMessage(
@@ -286,13 +322,15 @@ class IMAPFetcher:
     def _search(conn, addr: str, since: dt.datetime = None) -> list:
         date_crit = f'SINCE "{_imap_date(since)}"' if since else "ALL"
         try:
-            typ, data = conn.search(None, "OR", f'(FROM "{addr}")', f'(TO "{addr}")', date_crit)
+            typ, data = conn.search(None, "OR", "OR",
+                                    f'(FROM "{addr}")', f'(TO "{addr}")',
+                                    f'(CC "{addr}")', date_crit)
             if typ == "OK":
                 return data[0].split()
         except Exception:
             pass
         ids = set()
-        for crit in ("FROM", "TO"):
+        for crit in ("FROM", "TO", "CC"):
             try:
                 typ, data = conn.search(None, crit, f'"{addr}"', date_crit)
                 if typ == "OK":

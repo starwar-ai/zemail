@@ -26,7 +26,8 @@ def build_bot(cfg):
     llm = LLMClient(cfg.llm_api_base, cfg.llm_api_key, cfg.llm_model)
     analyzer = Analyzer(llm, context_chars=cfg.llm_context_chars,
                         ttl_seconds=cfg.session_ttl_minutes * 60,
-                        history_dir=cfg.session_history_dir)
+                        history_dir=cfg.session_history_dir,
+                        summary_dir=cfg.email_cache_dir)
     return BotCore(fetcher, analyzer)
 
 

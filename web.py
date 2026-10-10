@@ -30,6 +30,7 @@ from config import (RUNTIME_SETTINGS, load_config, load_runtime_settings,
 from exporter import build_report_docx
 from mailer import IMAPFetcher
 from mailer.cache import delete_cache, load_emails
+from summaries import delete_summaries
 
 JOB_TTL_SECONDS = 3600
 
@@ -173,6 +174,7 @@ def create_app(cfg=None):
                     llm, context_chars=cfg.llm_context_chars,
                     ttl_seconds=cfg.session_ttl_minutes * 60,
                     history_dir=os.path.join(cfg.session_history_dir, _safe_name(username)),
+                    summary_dir=user_cache_dir(username),
                 )
             return analyzers[username]
 
@@ -770,6 +772,7 @@ def create_app(cfg=None):
         get_analyzer(username).reset(_session_user(username, target))
         removed = history.delete_target(user_history_dir(), target)
         delete_cache(user_cache_dir(username), target)
+        delete_summaries(user_cache_dir(username), target)
         if not removed:
             return jsonify({"error": "该目标暂无记录"}), 404
         return jsonify({"ok": True})

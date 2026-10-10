@@ -101,20 +101,26 @@ def get_reports(history_dir: str, target: str) -> list:
 
 def append_exchange(history_dir: str, target: str, question: str, reply: str,
                     session_index: int = None) -> None:
-    """追问时向指定会话块追加一轮问答；缺省写入最近一块。首轮问答顺带生成会话标题。"""
+    """追问时向指定会话块追加一轮问答；缺省写入最近一块。标题由调用方另行设置。"""
     data = _load(history_dir, target)
     if not data["sessions"]:
         data["sessions"].append({"started_at": _now(), "messages": []})
     idx = session_index if isinstance(session_index, int) and \
         0 <= session_index < len(data["sessions"]) else len(data["sessions"]) - 1
     sess = data["sessions"][idx]
-    if not sess.get("title"):
-        sess["title"] = question.strip()[:20] or "新会话"
     sess.setdefault("messages", []).extend([
         {"role": "user", "content": question, "time": _now()},
         {"role": "assistant", "content": reply, "time": _now()},
     ])
     _save(history_dir, target, data)
+
+
+def set_title(history_dir: str, target: str, session_index: int, title: str) -> None:
+    """设置指定会话块的标题（首轮问答后由 AI 总结生成）。"""
+    data = _load(history_dir, target)
+    if isinstance(session_index, int) and 0 <= session_index < len(data["sessions"]):
+        data["sessions"][session_index]["title"] = title
+        _save(history_dir, target, data)
 
 
 def delete_target(history_dir: str, target: str) -> bool:

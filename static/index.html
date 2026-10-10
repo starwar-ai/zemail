@@ -88,7 +88,11 @@
     width: 300px; flex-shrink: 0; background: #fff; border-right: 1px solid var(--border);
     display: flex; flex-direction: column; overflow: hidden;
   }
-  .brand { padding: 20px 20px 14px; border-bottom: 1px solid var(--border); }
+  .brand {
+    padding: 20px 20px 14px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+  }
+  .brand .btn-icon { flex-shrink: 0; margin: -2px -6px 0 0; font-size: 16px; }
   .brand-name { font-size: 17px; font-weight: 700; letter-spacing: .5px; }
   .brand-name::before {
     content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 3px;
@@ -144,12 +148,14 @@
     font-size: 13px; outline: none;
   }
   .target-search input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+  /* 删除按钮：红色且靠右对齐，与目标名称拉开距离，防止误点 */
   .target-del {
-    border: none; background: none; color: var(--text-3); font-size: 15px;
-    padding: 2px 6px; border-radius: 6px; line-height: 1; flex-shrink: 0; opacity: 0;
+    border: none; background: none; color: var(--red); font-size: 15px;
+    padding: 2px 6px; border-radius: 6px; line-height: 1; flex-shrink: 0;
+    opacity: 0; margin-left: auto;
   }
   .target-item:hover .target-del { opacity: 1; }
-  .target-del:hover { background: var(--red-bg); color: var(--red); }
+  .target-del:hover { background: var(--red-bg); }
   .sess-badge {
     font-size: 10px; padding: 1px 7px; border-radius: 999px; white-space: nowrap;
     background: var(--green-light); color: var(--green); flex-shrink: 0;
@@ -220,6 +226,9 @@
   .tab:hover { color: var(--text); }
   .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
 
+  /* 报告页内「正文 / 素材」子页签 */
+  .report-subtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+
   .tab-pane { flex: 1; overflow-y: auto; padding: 20px 24px 48px; }
 
   /* 报告 */
@@ -271,23 +280,7 @@
   }
   .report-history-empty { font-size: 12.5px; color: var(--text-3); margin-top: 8px; }
 
-  /* 报告生成指令编辑区 */
-  .prompt-editor { max-width: 860px; margin-bottom: 14px; }
-  .prompt-editor summary {
-    cursor: pointer; font-size: 12.5px; color: var(--primary); user-select: none;
-  }
-  .prompt-editor summary:hover { text-decoration: underline; }
-  .prompt-editor textarea {
-    width: 100%; margin-top: 10px; padding: 10px 12px;
-    border: 1px solid #d1d5db; border-radius: 8px; font-size: 12.5px;
-    font-family: Consolas, "Courier New", monospace; line-height: 1.6;
-    outline: none; resize: vertical; background: #fff;
-  }
-  .prompt-editor textarea:focus {
-    border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
-  }
-  .prompt-editor-footer { margin-top: 6px; display: flex; justify-content: space-between; align-items: center; }
-  .prompt-tip { font-size: 12px; color: var(--text-3); }
+  /* 「已自定义」徽标 */
   .prompt-dirty {
     font-size: 11px; padding: 1px 8px; border-radius: 999px; margin-left: 6px;
     background: #fef3c7; color: #92400e;
@@ -352,8 +345,15 @@
     border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
   }
   .mail-count { font-size: 12px; color: var(--text-3); margin-bottom: 8px; }
-  .mail-filter .btn-primary { width: auto; padding: 7px 16px; }
-  .mail-filter .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+  /* 底部吸底操作栏：开始提问 / 同步新邮件 / 更多 */
+  .mail-action-bar {
+    position: sticky; bottom: 0; display: flex; gap: 10px; align-items: center;
+    flex-wrap: wrap; margin-top: 12px; padding: 10px 0;
+    background: var(--bg); border-top: 1px solid var(--border);
+  }
+  .mail-action-bar .btn-primary { width: auto; padding: 7px 16px; }
+  .mail-action-bar .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+  .mail-action-bar .more-menu { top: auto; bottom: calc(100% + 4px); } /* 底部栏的「更多」向上展开 */
   .mail-selected { font-size: 12px; color: var(--text-3); align-self: center; }
   /* 「更多」下拉菜单 */
   .more-wrap { position: relative; }
@@ -590,12 +590,10 @@
 
   /* 响应式：手机（≤768px）上下堆叠布局 */
   @media (max-width: 768px) {
-    /* 分栏改堆叠：sidebar 变顶部区域，目标列表限高纵向滚动 */
-    #app { flex-direction: column; height: auto; min-height: 100vh; }
+    /* 整页锁定视口高度（与桌面一致）：面板内部滚动，对话输入区固定底部 */
+    #app { flex-direction: column; height: 100vh; height: 100dvh; }
     #sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: none; }
     #target-list { max-height: 180px; }
-    #main { overflow: visible; }
-    #workspace, .tab-pane { overflow: visible; }
     /* tab 栏横向滚动不挤压 */
     #tabs { overflow-x: auto; padding: 10px 12px 0; }
     .tab { white-space: nowrap; }
@@ -604,7 +602,7 @@
     #mail-table-wrap { overflow-x: auto; }
     .mail-table { min-width: 640px; }
     /* 工具条换行堆叠（flex-wrap 已有），按钮宽度自适应 */
-    .mail-filter .btn-primary, .mail-filter .btn-ghost { width: auto; }
+    .mail-action-bar .btn-primary, .mail-action-bar .btn-ghost { width: auto; }
     /* 邮件详情弹窗接近全屏 */
     .modal-mask { padding: 8px; }
     .modal { width: 100%; max-height: 94vh; }
@@ -612,7 +610,7 @@
     /* 个人中心表单单列 */
     .profile-form { grid-template-columns: 1fr; }
     /* 报告正文等取消桌面限宽 */
-    .markdown-body, .report-meta-wrap, .prompt-editor, .chat-wrap,
+    .markdown-body, .report-meta-wrap, .chat-wrap,
     .session-block, .chat-notice { max-width: 100%; }
     /* 对话输入行不溢出；输入框至少两行高，提示文字完整可见 */
     #chat-send { padding: 10px 16px; }
@@ -666,12 +664,6 @@
     .empty-analyze { display: block; }
     /* iOS：输入框字号 ≥16px 防止聚焦自动缩放（属性选择器提升优先级压过桌面类选择器） */
     input:not([type=checkbox]), select, textarea { font-size: 16px; }
-    /* 聊天页整屏独立滚动：154px = 应用栏52 + 页签栏48 + 面板上下 padding 54 */
-    .chat-wrap {
-      height: calc(100vh - 154px);
-      height: calc(100dvh - 154px);
-      min-height: 320px;
-    }
     /* 触控无悬停，删除按钮常显 */
     .target-del { opacity: 1; }
   }
@@ -694,8 +686,7 @@
   [data-theme="dark"] .session-bar select,
   [data-theme="dark"] .mail-filter input, [data-theme="dark"] .users-add input,
   [data-theme="dark"] .users-add select, [data-theme="dark"] .settings-row input,
-  [data-theme="dark"] .chat-input-row textarea, [data-theme="dark"] .prompt-editor textarea,
-  [data-theme="dark"] .profile-body textarea, [data-theme="dark"] .profile-form input,
+  [data-theme="dark"] .chat-input-row textarea, [data-theme="dark"] .profile-body textarea, [data-theme="dark"] .profile-form input,
   [data-theme="dark"] .target-search input, [data-theme="dark"] .analyze-box input,
   [data-theme="dark"] .login-card input, [data-theme="dark"] #dlg-input {
     background: #151d2b; color: var(--text); border-color: #4b5563;
@@ -740,8 +731,11 @@
 <div id="app" class="hidden no-target">
   <aside id="sidebar">
     <div class="brand">
-      <div class="brand-name">邮件分析助手</div>
-      <div class="brand-sub">IMAP 抓取 · AI 分析 · 会话追问</div>
+      <div class="brand-text">
+        <div class="brand-name">邮件分析助手</div>
+        <div class="brand-sub">IMAP 抓取 · AI 分析 · 会话追问</div>
+      </div>
+      <button id="theme-toggle" class="btn-icon" title="切换深色模式">🌙</button>
     </div>
     <div class="analyze-box">
       <input type="email" id="email-input" placeholder="输入要分析的邮箱地址">
@@ -754,7 +748,6 @@
     </div>
     <div class="target-list-head">
       <span>邮箱列表</span>
-      <button id="theme-toggle" class="btn-icon" title="切换深色模式">🌙</button>
       <button id="refresh-targets" class="btn-icon" title="刷新列表">⟳</button>
     </div>
     <div class="target-search"><input type="text" id="target-search" placeholder="搜索邮箱…"></div>
@@ -821,27 +814,27 @@
             </svg>
           </button>
         </div>
-        <details id="prompt-editor" class="prompt-editor">
-          <summary>报告生成要求（展开查看默认提示词，可修改）<span id="prompt-dirty" class="prompt-dirty hidden">已自定义</span></summary>
-          <textarea id="prompt-textarea" rows="8" spellcheck="false"
-                    placeholder="正在加载默认提示词…"></textarea>
-          <div class="prompt-editor-footer">
-            <span class="prompt-tip">修改将在下次生成报告时生效</span>
-            <button id="prompt-reset-btn" class="link-btn">恢复默认</button>
-          </div>
-        </details>
-        <div id="report-meta-wrap" class="report-meta-wrap hidden">
-          <div class="report-meta-bar"><span id="report-meta-text"></span></div>
-          <details id="report-history-details" class="report-history">
-            <summary>会话履历</summary>
-            <div id="report-history-list" class="report-history-list"></div>
-          </details>
-          <details id="report-prompt-details" class="report-history hidden">
-            <summary>本次生成要求</summary>
-            <div id="report-prompt-text" class="report-prompt-text"></div>
-          </details>
+        <div class="report-subtabs">
+          <button class="tab active" data-report-sub="body">正文</button>
+          <button class="tab" data-report-sub="material">素材</button>
         </div>
-        <div id="report-content"></div>
+        <div id="report-body-pane">
+          <div id="report-content"></div>
+        </div>
+        <div id="report-material-pane" class="hidden">
+          <div id="report-meta-wrap" class="report-meta-wrap hidden">
+            <div class="report-meta-bar"><span id="report-meta-text"></span></div>
+            <details id="report-history-details" class="report-history">
+              <summary>会话履历</summary>
+              <div id="report-history-list" class="report-history-list"></div>
+            </details>
+            <details id="report-prompt-details" class="report-history hidden">
+              <summary>本次生成要求</summary>
+              <div id="report-prompt-text" class="report-prompt-text"></div>
+            </details>
+          </div>
+          <div id="report-material-empty" class="pane-empty hidden">暂无素材。生成报告后可在此查看素材来源、会话履历和生成要求。</div>
+        </div>
       </section>
 
       <section id="tab-emails" class="tab-pane hidden">
@@ -852,6 +845,10 @@
             <option value="发出">发送</option>
           </select>
           <input type="text" id="mail-keyword" placeholder="搜索邮件…">
+        </div>
+        <div class="mail-count" id="mail-count"></div>
+        <div id="mail-table-wrap"></div>
+        <div class="mail-action-bar">
           <button id="session-btn" class="btn-primary" title="默认使用全部往来邮件；勾选部分邮件可缩小提问范围">开始提问</button>
           <span id="mail-selected-count" class="mail-selected"></span>
           <button id="fetch-btn" class="btn-ghost">同步新邮件</button>
@@ -863,8 +860,6 @@
             </div>
           </div>
         </div>
-        <div class="mail-count" id="mail-count"></div>
-        <div id="mail-table-wrap"></div>
       </section>
 
       <section id="tab-chat" class="tab-pane">
@@ -1041,13 +1036,15 @@ const el = {
   reportContent: $("report-content"), reportVersion: $("report-version"),
   newReportBtn: $("new-report-btn"),
   reportDelBtn: $("report-del-btn"),
+  reportSubtabs: document.querySelectorAll(".report-subtabs .tab"),
+  reportBodyPane: $("report-body-pane"),
+  reportMaterialPane: $("report-material-pane"),
+  reportMaterialEmpty: $("report-material-empty"),
   reportMetaWrap: $("report-meta-wrap"), reportMetaText: $("report-meta-text"),
   reportHistoryDetails: $("report-history-details"),
   reportHistoryList: $("report-history-list"),
   reportPromptDetails: $("report-prompt-details"),
   reportPromptText: $("report-prompt-text"),
-  promptEditor: $("prompt-editor"), promptTextarea: $("prompt-textarea"),
-  promptResetBtn: $("prompt-reset-btn"), promptDirty: $("prompt-dirty"),
   mailDirection: $("mail-direction"), mailKeyword: $("mail-keyword"),
   mailCount: $("mail-count"), mailTableWrap: $("mail-table-wrap"),
   sessionBtn: $("session-btn"), mailSelectedCount: $("mail-selected-count"),
@@ -1103,6 +1100,7 @@ const state = {
   pollTimer: null,
   chatWaiting: false,
   chatAbort: null,
+  reportPending: false, // 下一次发送由「生成报告」按钮触发，其回复卡片才显示「存为报告」
 };
 
 function targetKey() {
@@ -1740,7 +1738,7 @@ function switchTab(name) {
   for (const key of Object.keys(el.panes)) {
     el.panes[key].classList.toggle("hidden", key !== name);
   }
-  if (name === "report") { renderReport(); loadDefaultPrompt(false); } // 预取默认提示词，展开即见
+  if (name === "report") { renderReport(); loadDefaultPrompt(); } // 预取报告提示词，点「生成报告」即用
   if (name === "emails") renderMailTable();
   if (name === "chat") renderChatEntry();
 }
@@ -1793,12 +1791,14 @@ function renderReport() {
   el.reportContent.innerHTML = "";
   if (!reports.length) {
     el.reportMetaWrap.classList.add("hidden");
+    el.reportMaterialEmpty.classList.remove("hidden");
     const div = document.createElement("div");
     div.className = "pane-empty";
     div.textContent = "暂无报告。到「对话追问」页点击「生成报告」即可生成，也可以先围绕邮件提问补充细节。";
     el.reportContent.appendChild(div);
     return;
   }
+  el.reportMaterialEmpty.classList.add("hidden");
   for (const r of reports) {
     const opt = document.createElement("option");
     opt.value = String(r.version);
@@ -1854,6 +1854,16 @@ el.reportVersion.addEventListener("change", () => {
   renderReport();
 });
 
+// 报告页内「正文 / 素材」子页签
+el.reportSubtabs.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    el.reportSubtabs.forEach((b) => b.classList.toggle("active", b === btn));
+    const isBody = btn.dataset.reportSub === "body";
+    el.reportBodyPane.classList.toggle("hidden", !isBody);
+    el.reportMaterialPane.classList.toggle("hidden", isBody);
+  });
+});
+
 // 「生成报告」按钮（对话页输入栏）状态与会话联动
 function syncReportBtns() {
   const label = (state.reports && state.reports.length) ? "生成新报告" : "生成报告";
@@ -1861,56 +1871,36 @@ function syncReportBtns() {
   el.newReportBtn.textContent = label;
 }
 
-// 「生成报告」= 把报告提示词填入输入框，用户可修改后按发送，回复显示在对话流中，
-// 满意后在回复卡片上点「存为报告」固化为新版本
+// 「生成报告」= 把报告提示词填入输入框，用户可修改后按发送，回复显示在对话流中；
+// 由该按钮触发的这次回复卡片上才显示「存为报告」，点它固化为新版本
 async function fillReportPrompt() {
   if (!state.target) return;
-  await loadDefaultPrompt(false); // 确保默认提示词已就绪（幂等）
-  el.chatInput.value = el.promptTextarea.value.trim();
+  await loadDefaultPrompt(); // 确保报告提示词已就绪（幂等）
+  el.chatInput.value = defaultPromptText.trim();
   el.chatInput.dispatchEvent(new Event("input")); // 触发输入框自适应高度
+  state.reportPending = true;
   switchTab("chat");
   el.chatInput.focus();
 }
 
 el.newReportBtn.addEventListener("click", fillReportPrompt);
 
-// ---------- 报告生成要求编辑区 ----------
+// ---------- 报告提示词（「生成报告」时填入输入框；自定义在个人中心维护） ----------
 
-let defaultPromptLoaded = false; // 默认要求只拉一次，保留用户编辑内容；切目标不清空
+let defaultPromptLoaded = false; // 只拉一次并缓存；个人中心保存后失效重拉
 let defaultPromptText = "";
 
-// 与默认值不一致时在编辑区标题上显示「已自定义」，让用户知道自定义正在生效
-function updatePromptDirty() {
-  const dirty = defaultPromptLoaded &&
-    el.promptTextarea.value.trim() !== defaultPromptText.trim();
-  el.promptDirty.classList.toggle("hidden", !dirty);
-}
-
-async function loadDefaultPrompt(overwrite) {
+async function loadDefaultPrompt() {
+  if (defaultPromptLoaded) return;
   try {
     const { ok, data } = await fetchJson("/api/report-prompt");
     if (!ok) { showError(data.error || "默认要求加载失败"); return; }
     defaultPromptText = data.prompt || "";
-    if (overwrite || !defaultPromptLoaded) {
-      el.promptTextarea.value = defaultPromptText;
-      defaultPromptLoaded = true;
-    }
-    updatePromptDirty();
+    defaultPromptLoaded = true;
   } catch (e) {
     showError(e.message);
   }
 }
-
-el.promptEditor.addEventListener("toggle", () => {
-  if (el.promptEditor.open && !defaultPromptLoaded) loadDefaultPrompt(false);
-});
-
-el.promptTextarea.addEventListener("input", updatePromptDirty);
-
-el.promptResetBtn.addEventListener("click", async () => {
-  await loadDefaultPrompt(true);
-  toast("已恢复默认要求");
-});
 
 // ---------- 个人中心（邮箱设置 / 报告提示词 / 修改密码，底部统一保存） ----------
 
@@ -1982,7 +1972,10 @@ el.profileMailTestBtn.addEventListener("click", async () => {
 
 function closeProfile() { el.profileMask.classList.add("hidden"); }
 
-el.profileBtn.addEventListener("click", openProfile);
+el.profileBtn.addEventListener("click", () => {
+  closeDrawer(); // 移动端抽屉里点击时先收起抽屉，避免盖住弹层
+  openProfile();
+});
 el.profileClose.addEventListener("click", closeProfile);
 el.profileMask.addEventListener("click", (e) => {
   if (e.target === el.profileMask) closeProfile();
@@ -2523,6 +2516,8 @@ function appendRetry(bubble, message) {
 async function sendChat() {
   const message = el.chatInput.value.trim();
   if (!message || !state.target || state.chatWaiting) return;
+  const isReport = state.reportPending; // 本次发送是否由「生成报告」触发
+  state.reportPending = false;
   el.chatInput.value = "";
   el.chatInput.style.height = "";
   state.chatWaiting = true;
@@ -2538,7 +2533,7 @@ async function sendChat() {
       (text) => { streamed = true; renderer.push(text); });
     renderer.flush();
     if (!streamed) thinking.textContent = full || "(空回复)";
-    if (full && full.trim()) appendSaveReport(thinking, full.trim());
+    if (full && full.trim() && isReport) appendSaveReport(thinking, full.trim());
     loadSessions(); // 首轮问答后后端会生成会话标题，刷新切换器
   } catch (e) {
     renderer.flush();
@@ -2577,6 +2572,7 @@ el.chatInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
 });
 el.chatInput.addEventListener("input", () => {
+  if (!el.chatInput.value.trim()) state.reportPending = false; // 清空输入框视为放弃本次报告生成
   el.chatInput.style.height = "auto";
   el.chatInput.style.height = Math.min(el.chatInput.scrollHeight, 120) + "px";
 });
@@ -2594,6 +2590,7 @@ async function loadConversation() {
     el.chatLog.innerHTML = "";
     state.liveMessages = data.messages.length;
     for (const m of data.messages) appendCollapsibleMsg(el.chatLog, m.role, m.content);
+    el.chatLog.scrollTop = el.chatLog.scrollHeight; // 定位到最新消息
   } catch (e) { /* 回填失败不影响主流程 */ }
 }
 

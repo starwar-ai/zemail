@@ -15,6 +15,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 ROLES = ("admin", "user")
 USERNAME_RE = re.compile(r"^[\w.@-]{2,32}$")
+EMAIL_ADDR_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# 用户可在个人中心覆盖的邮箱（IMAP）设置项，未设置的项回退系统默认
+MAIL_SETTING_FIELDS = ("email_address", "email_password", "imap_host", "imap_port")
 
 
 class UserError(Exception):
@@ -113,6 +116,68 @@ class UserStore:
                     and self._count_admins(data) <= 1:
                 raise UserError("不能移除最后一名管理员")
             data[username]["role"] = role
+            self._save(data)
+
+    def get_report_prompt(self, username: str) -> str:
+        """用户自定义的报告默认提示词，未设置返回空串。"""
+        user = self._load().get(username)
+        return (user or {}).get("report_prompt") or ""
+
+    def set_report_prompt(self, username: str, prompt: str) -> None:
+        """保存用户的报告默认提示词；空串表示恢复系统默认。"""
+        if len(prompt) > 4000:
+            raise UserError("提示词不能超过 4000 字")
+        with self._lock:
+            data = self._load()
+            if username not in data:
+                raise UserError("用户不存在")
+            if prompt:
+                data[username]["report_prompt"] = prompt
+            else:
+                data[username].pop("report_prompt", None)
+            self._save(data)
+
+    def get_mail_settings(self, username: str) -> dict:
+        """用户的邮箱（IMAP）设置覆盖项，未设置的字段不出现。"""
+        user = self._load().get(username) or {}
+        return dict(user.get("mail_settings") or {})
+
+    def set_mail_settings(self, username: str, updates: dict) -> None:
+        """保存用户的邮箱设置覆盖项；值为 None 表示清除该项（回退系统默认）。"""
+        cleaned = {}
+        for key, value in updates.items():
+            if key not in MAIL_SETTING_FIELDS:
+                raise UserError(f"不支持的设置项：{key}")
+            if value is None or value == "":
+                cleaned[key] = None
+                continue
+            value = str(value).strip()
+            if key == "email_address" and not EMAIL_ADDR_RE.match(value):
+                raise UserError("邮箱地址格式不正确")
+            if key == "imap_host" and not value:
+                raise UserError("IMAP 服务器不能为空")
+            if key == "imap_port":
+                try:
+                    value = int(value)
+                except (TypeError, ValueError):
+                    raise UserError("IMAP 端口必须是整数")
+                if not 1 <= value <= 65535:
+                    raise UserError("IMAP 端口需在 1-65535 之间")
+            cleaned[key] = value
+        with self._lock:
+            data = self._load()
+            if username not in data:
+                raise UserError("用户不存在")
+            ms = dict(data[username].get("mail_settings") or {})
+            for key, value in cleaned.items():
+                if value is None:
+                    ms.pop(key, None)
+                else:
+                    ms[key] = value
+            if ms:
+                data[username]["mail_settings"] = ms
+            else:
+                data[username].pop("mail_settings", None)
             self._save(data)
 
     @staticmethod

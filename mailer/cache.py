@@ -27,6 +27,8 @@ def load_emails(cache_dir: str, target: str) -> list:
                 to_addrs=item["to_addrs"],
                 direction=item["direction"],
                 body=item["body"],
+                html=item.get("html", ""),
+                attachments=item.get("attachments") or [],
             )
             for item in data
         ]
@@ -47,6 +49,8 @@ def save_emails(cache_dir: str, target: str, emails: list) -> None:
             "to_addrs": m.to_addrs,
             "direction": m.direction,
             "body": m.body,
+            "html": m.html,
+            "attachments": m.attachments,
         }
         for m in emails
     ]
@@ -54,6 +58,15 @@ def save_emails(cache_dir: str, target: str, emails: list) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=1)
     os.replace(tmp, path)
+
+
+def delete_cache(cache_dir: str, target: str) -> bool:
+    """删除某目标的本地邮件缓存。返回是否有文件被删。"""
+    path = _cache_path(cache_dir, target)
+    if os.path.isfile(path):
+        os.remove(path)
+        return True
+    return False
 
 
 def merge_emails(cached: list, fresh: list) -> list:

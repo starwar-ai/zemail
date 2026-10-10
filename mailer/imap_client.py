@@ -3,13 +3,21 @@ import base64
 import datetime as dt
 import imaplib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from email import policy
 from email.parser import BytesParser
 from email.utils import getaddresses, parsedate_to_datetime
 from html.parser import HTMLParser
 
 _FOLDER_KEYWORDS = ("inbox", "sent", "已发送", "已發送", "发件", "寄件", "收件")
+
+# IMAP SINCE 日期格式（服务器端过滤），手动拼英文月份避免本地化输出
+_IMAP_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _imap_date(d: dt.datetime) -> str:
+    return f"{d.day:02d}-{_IMAP_MONTHS[d.month - 1]}-{d.year}"
 
 # LIST 响应格式：(\HasNoChildren) "/" "Sent Messages"
 _LIST_RE = re.compile(r'\((?P<flags>[^)]*)\)\s+"(?P<delim>[^"]*)"\s+(?P<name>.+)$')
@@ -60,12 +68,24 @@ def encode_modified_utf7(s: str) -> str:
 # ---------- 邮件解析 ----------
 
 class _HTMLStripper(HTMLParser):
+    _SKIP_TAGS = {"script", "style", "head"}
+
     def __init__(self):
         super().__init__()
         self.parts = []
+        self._skip = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self._SKIP_TAGS:
+            self._skip += 1
+
+    def handle_endtag(self, tag):
+        if tag in self._SKIP_TAGS and self._skip > 0:
+            self._skip -= 1
 
     def handle_data(self, data):
-        self.parts.append(data)
+        if not self._skip:
+            self.parts.append(data)
 
     def get_text(self) -> str:
         return " ".join("".join(self.parts).split())
@@ -114,6 +134,47 @@ def extract_text(msg) -> str:
     return ""
 
 
+def extract_html(msg, html_chars: int = 200_000) -> str:
+    """提取邮件的 text/html 原文用于页面渲染；纯文本邮件返回空串。"""
+    htmls = []
+    for part in msg.walk():
+        if part.get_content_maintype() == "multipart":
+            continue
+        if part.get_content_type() != "text/html":
+            continue
+        disp = str(part.get("Content-Disposition") or "").lower()
+        if "attachment" in disp:
+            continue
+        try:
+            content = part.get_content()
+            if not isinstance(content, str):
+                content = str(content)
+        except Exception:
+            payload = part.get_payload(decode=True) or b""
+            charset = part.get_content_charset() or "utf-8"
+            content = payload.decode(charset, errors="replace")
+        htmls.append(content)
+    html = "\n".join(htmls).strip()
+    if len(html) > html_chars:
+        html = html[:html_chars]
+    return html
+
+
+def extract_attachment_names(msg) -> list:
+    """收集附件文件名（只记录名字，不下载内容）。"""
+    names = []
+    for part in msg.walk():
+        if part.get_content_maintype() == "multipart":
+            continue
+        disp = str(part.get("Content-Disposition") or "").lower()
+        if "attachment" not in disp:
+            continue
+        name = part.get_filename()
+        if name:
+            names.append(str(name))
+    return names
+
+
 @dataclass
 class EmailMessage:
     date: dt.datetime
@@ -122,14 +183,19 @@ class EmailMessage:
     to_addrs: str
     direction: str  # "发出" / "收到"
     body: str
+    html: str = ""  # text/html 原文，供前端渲染；纯文本邮件为空
+    attachments: list = field(default_factory=list)
 
     def digest(self, index: int) -> str:
-        return (
+        text = (
             f"[{index}] {self.date:%Y-%m-%d %H:%M} | {self.direction} | 主题: {self.subject}\n"
             f"发件人: {self.from_addr}\n"
             f"收件人: {self.to_addrs}\n"
             f"正文:\n{self.body}"
         )
+        if self.attachments:
+            text += f"\n附件: {', '.join(self.attachments)}（未读取内容）"
+        return text
 
 
 def parse_raw_email(raw: bytes, own_addr: str, target: str, body_chars: int = 2000):
@@ -159,6 +225,8 @@ def parse_raw_email(raw: bytes, own_addr: str, target: str, body_chars: int = 20
         to_addrs=to_addrs,
         direction=direction,
         body=body,
+        html=extract_html(msg),
+        attachments=extract_attachment_names(msg),
     )
 
 
@@ -215,9 +283,10 @@ class IMAPFetcher:
             return False
 
     @staticmethod
-    def _search(conn, addr: str) -> list:
+    def _search(conn, addr: str, since: dt.datetime = None) -> list:
+        date_crit = f'SINCE "{_imap_date(since)}"' if since else "ALL"
         try:
-            typ, data = conn.search(None, "OR", f'(FROM "{addr}")', f'(TO "{addr}")')
+            typ, data = conn.search(None, "OR", f'(FROM "{addr}")', f'(TO "{addr}")', date_crit)
             if typ == "OK":
                 return data[0].split()
         except Exception:
@@ -225,7 +294,7 @@ class IMAPFetcher:
         ids = set()
         for crit in ("FROM", "TO"):
             try:
-                typ, data = conn.search(None, crit, f'"{addr}"')
+                typ, data = conn.search(None, crit, f'"{addr}"', date_crit)
                 if typ == "OK":
                     ids.update(data[0].split())
             except Exception:
@@ -235,12 +304,13 @@ class IMAPFetcher:
     def fetch_correspondence(self, target: str) -> list:
         """返回与 target 的往来邮件列表，按时间升序。
 
-        配置了 cache_dir 时，结果缓存在本地：再次分析同一地址只增量抓取
-        最近一次缓存之后的新邮件，避免反复全量抓取。
+        配置了 cache_dir 时，结果缓存在本地：再次分析同一地址时，IMAP 搜索
+        会带 SINCE 日期条件（最近一封缓存邮件往前回 1 天），只有新邮件才
+        下载正文，重叠部分靠去重合并。
         """
         target = target.strip().lower()
         if not self.cache_dir:
-            since = dt.datetime.now() - dt.timedelta(days=self.lookback_days)
+            since = self._full_since()
             return self._fetch(target, since)
         from .cache import load_emails, merge_emails, save_emails
         cached = load_emails(self.cache_dir, target)
@@ -248,14 +318,20 @@ class IMAPFetcher:
             # 增量抓取：从最近一封缓存邮件往前回看 1 天，重叠部分靠去重合并
             since = cached[-1].date - dt.timedelta(days=1)
         else:
-            since = dt.datetime.now() - dt.timedelta(days=self.lookback_days)
+            since = self._full_since()
         fresh = self._fetch(target, since)
         merged = merge_emails(cached, fresh)
         save_emails(self.cache_dir, target, merged)
         return merged
 
-    def _fetch(self, target: str, since: dt.datetime) -> list:
-        """从 IMAP 抓取 since 之后与 target 的往来邮件，按时间升序。"""
+    def _full_since(self):
+        """无缓存时的起始时间；lookback_days <= 0 表示不限时间。"""
+        if self.lookback_days and self.lookback_days > 0:
+            return dt.datetime.now() - dt.timedelta(days=self.lookback_days)
+        return None
+
+    def _fetch(self, target: str, since) -> list:
+        """从 IMAP 抓取 since 之后（None 表示不限）与 target 的往来邮件，按时间升序。"""
         messages, seen = [], set()
         conn = imaplib.IMAP4_SSL(self.host, self.port)
         try:
@@ -263,8 +339,10 @@ class IMAPFetcher:
             for folder in self._resolve_folders(conn):
                 if not self._select(conn, folder):
                     continue
-                ids = self._search(conn, target)
-                for num in ids[-self.max_results:]:
+                ids = self._search(conn, target, since)
+                # max_results <= 0 表示不限数量（ids[-0:] 即全部）
+                selected = ids[-self.max_results:] if self.max_results > 0 else ids
+                for num in selected:
                     try:
                         typ, data = conn.fetch(num, "(BODY.PEEK[])")
                         if typ != "OK" or not data or not isinstance(data[0], tuple):
@@ -272,7 +350,7 @@ class IMAPFetcher:
                         parsed = parse_raw_email(data[0][1], self.user, target, self.body_chars)
                     except Exception:
                         continue
-                    if parsed is None or parsed.date < since:
+                    if parsed is None or (since and parsed.date < since):
                         continue
                     key = (parsed.date, parsed.subject, parsed.from_addr)
                     if key in seen:

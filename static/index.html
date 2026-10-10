@@ -2,9 +2,11 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<script>try { document.documentElement.dataset.theme = localStorage.getItem("zemail:theme") || ""; } catch (e) {}</script>
 <title>邮件分析助手</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
 <style>
   :root {
     --primary: #2563eb;
@@ -56,8 +58,30 @@
     background: var(--red-bg); border: 1px solid var(--red-border); color: var(--red);
     border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin-bottom: 10px;
   }
+  .pwd-wrap { position: relative; margin-bottom: 10px; }
+  .pwd-wrap input { margin-bottom: 0; padding-right: 38px; }
+  #pwd-toggle {
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    border: none; background: none; font-size: 15px; padding: 6px 8px; color: var(--text-3);
+  }
+  .login-tip { font-size: 12px; color: var(--text-3); text-align: center; margin-top: 12px; }
 
   #app { display: flex; height: 100vh; }
+
+  /* 移动端专属元素：桌面默认隐藏 */
+  #drawer-mask { display: none; }
+
+  /* 顶部导航栏：PC 常驻，显示当前目标与统计 */
+  #appbar {
+    display: flex; align-items: center; gap: 14px; padding: 10px 24px;
+    background: #fff; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  #appbar #ws-target {
+    font-size: 16px; font-weight: 700; margin: 0; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; flex-shrink: 1;
+  }
+  #appbar .chips { margin-top: 0; flex-wrap: nowrap; overflow-x: auto; }
+  #drawer-open-btn { display: none; } /* 桌面端隐藏菜单键，移动端媒体查询里恢复 */
 
   /* ---------- 侧边栏 ---------- */
   #sidebar {
@@ -114,18 +138,35 @@
     font-size: 13px; font-weight: 600; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap;
   }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+  .target-search { padding: 0 16px 6px; }
+  .target-search input {
+    width: 100%; padding: 7px 11px; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: 13px; outline: none;
+  }
+  .target-search input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+  .target-del {
+    border: none; background: none; color: var(--text-3); font-size: 15px;
+    padding: 2px 6px; border-radius: 6px; line-height: 1; flex-shrink: 0; opacity: 0;
+  }
+  .target-item:hover .target-del { opacity: 1; }
+  .target-del:hover { background: var(--red-bg); color: var(--red); }
+  .sess-badge {
+    font-size: 10px; padding: 1px 7px; border-radius: 999px; white-space: nowrap;
+    background: var(--green-light); color: var(--green); flex-shrink: 0;
+  }
   .target-item .row2 { font-size: 11px; color: var(--text-3); margin-top: 3px; }
 
   .sidebar-footer { border-top: 1px solid var(--border); padding: 12px 16px; }
   .user-row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
   .user-name {
-    flex: 1; font-size: 13px; font-weight: 600; overflow: hidden;
+    font-size: 13px; font-weight: 600; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap;
   }
   .role-badge { font-size: 11px; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
   .role-badge.admin { background: #fef3c7; color: #92400e; }
   .role-badge.user { background: #f3f4f6; color: var(--text-2); }
+  /* 个人中心图标按钮：与用户名/角色同一行，靠右 */
+  .profile-btn { margin-left: auto; flex-shrink: 0; }
   .footer-btns { display: flex; gap: 8px; }
   .btn-small {
     flex: 1; padding: 6px 0; font-size: 12px; border: 1px solid #d1d5db;
@@ -150,19 +191,20 @@
   #empty-state .icon { font-size: 44px; margin-bottom: 14px; }
   #empty-state h2 { font-size: 17px; color: var(--text-2); font-weight: 600; margin-bottom: 8px; }
   #empty-state p { font-size: 13px; line-height: 1.8; }
+  .empty-hint-mobile { display: none; }
+  .empty-analyze { display: none; width: 100%; max-width: 320px; margin-top: 20px; }
+  .empty-analyze input {
+    width: 100%; padding: 10px 13px; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: 16px; outline: none; margin-bottom: 8px;
+  }
+  .empty-analyze input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
 
   #workspace { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  #ws-header {
-    display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
-    padding: 18px 24px 0; flex-wrap: wrap;
-  }
-  #ws-header h1 { font-size: 19px; font-weight: 700; word-break: break-all; }
   .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
   .chip {
     font-size: 12px; color: var(--text-2); background: #fff; border: 1px solid var(--border);
     border-radius: 999px; padding: 3px 11px;
   }
-  .ws-actions { display: flex; gap: 8px; flex-shrink: 0; }
   .btn-ghost {
     padding: 7px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px;
     background: #fff; color: #4b5563;
@@ -181,15 +223,15 @@
   .tab-pane { flex: 1; overflow-y: auto; padding: 20px 24px 48px; }
 
   /* 报告 */
-  .markdown-body { font-size: 14px; line-height: 1.75; max-width: 860px; }
-  .markdown-body h1, .markdown-body h2, .markdown-body h3 { margin: 18px 0 8px; line-height: 1.4; }
-  .markdown-body p { margin: 8px 0; }
-  .markdown-body ul, .markdown-body ol { padding-left: 22px; margin: 8px 0; }
+  .markdown-body { font-size: 14px; line-height: 1.7; max-width: 860px; }
+  .markdown-body h1, .markdown-body h2, .markdown-body h3 { margin: 10px 0 6px; line-height: 1.4; font-size: 15px; }
+  .markdown-body p { margin: 6px 0; }
+  .markdown-body ul, .markdown-body ol { padding-left: 20px; margin: 6px 0; }
   .markdown-body code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
-  .markdown-body pre { background: #f3f4f6; padding: 12px; border-radius: 8px; overflow-x: auto; }
-  .markdown-body blockquote { border-left: 3px solid #d1d5db; padding-left: 12px; color: var(--text-2); margin: 8px 0; }
-  .markdown-body table { border-collapse: collapse; margin: 8px 0; }
-  .markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: 6px 10px; }
+  .markdown-body pre { background: #f3f4f6; padding: 10px; border-radius: 8px; overflow-x: auto; }
+  .markdown-body blockquote { border-left: 3px solid #d1d5db; padding-left: 10px; color: var(--text-2); margin: 6px 0; }
+  .markdown-body table { border-collapse: collapse; margin: 6px 0; }
+  .markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: 4px 8px; }
   .markdown-body a { color: var(--primary); }
   .pane-empty { color: var(--text-3); font-size: 13px; padding: 32px 0; text-align: center; }
 
@@ -203,9 +245,101 @@
     border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
   }
   .report-toolbar .btn-primary { width: auto; padding: 7px 18px; }
-  .report-hint { font-size: 12.5px; }
-  .report-hint.ok { color: var(--green); }
-  .report-hint.err { color: var(--red); }
+  /* 低调的图标按钮（删除本版等）：平时灰，悬停才显红色 */
+  .icon-btn {
+    border: none; background: none; padding: 6px; border-radius: 6px;
+    color: var(--text-3); cursor: pointer; display: inline-flex; align-items: center;
+  }
+  .icon-btn:hover { color: var(--red); background: var(--red-bg); }
+  .icon-btn.plain:hover { color: var(--primary); background: rgba(37,99,235,.08); }
+  .icon-btn:disabled { opacity: .5; cursor: default; }
+  .icon-btn svg { width: 15px; height: 15px; }
+
+  /* 报告素材来源 / 会话履历 */
+  .report-meta-wrap { max-width: 860px; margin-bottom: 16px; }
+  .report-meta-bar {
+    font-size: 12.5px; color: var(--text-2); background: #fff;
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px;
+  }
+  .report-history { margin-top: 8px; }
+  .report-history summary {
+    cursor: pointer; font-size: 12.5px; color: var(--primary); user-select: none;
+  }
+  .report-history summary:hover { text-decoration: underline; }
+  .report-history-list {
+    margin-top: 10px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .report-history-empty { font-size: 12.5px; color: var(--text-3); margin-top: 8px; }
+
+  /* 报告生成指令编辑区 */
+  .prompt-editor { max-width: 860px; margin-bottom: 14px; }
+  .prompt-editor summary {
+    cursor: pointer; font-size: 12.5px; color: var(--primary); user-select: none;
+  }
+  .prompt-editor summary:hover { text-decoration: underline; }
+  .prompt-editor textarea {
+    width: 100%; margin-top: 10px; padding: 10px 12px;
+    border: 1px solid #d1d5db; border-radius: 8px; font-size: 12.5px;
+    font-family: Consolas, "Courier New", monospace; line-height: 1.6;
+    outline: none; resize: vertical; background: #fff;
+  }
+  .prompt-editor textarea:focus {
+    border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+  }
+  .prompt-editor-footer { margin-top: 6px; display: flex; justify-content: space-between; align-items: center; }
+  .prompt-tip { font-size: 12px; color: var(--text-3); }
+  .prompt-dirty {
+    font-size: 11px; padding: 1px 8px; border-radius: 999px; margin-left: 6px;
+    background: #fef3c7; color: #92400e;
+  }
+
+  /* 个人中心弹层 */
+  .profile-modal { width: 640px; }
+  .modal-body.profile-body { white-space: normal; }
+  .profile-section + .profile-section {
+    margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border);
+  }
+  .profile-section-head { display: flex; align-items: center; }
+  .profile-section-head h4 { font-size: 14px; font-weight: 600; }
+  .profile-hint { margin: 6px 0 10px; font-size: 12.5px; color: var(--text-3); line-height: 1.6; }
+  .profile-form {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 10px;
+  }
+  .profile-form label {
+    display: flex; flex-direction: column; gap: 4px;
+    font-size: 12.5px; color: var(--text-2);
+  }
+  .profile-form input {
+    padding: 7px 11px; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: 13px; outline: none; background: #fff; color: inherit;
+  }
+  .profile-form input:focus {
+    border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+  }
+  .profile-body textarea {
+    width: 100%; padding: 10px 12px;
+    border: 1px solid #d1d5db; border-radius: 8px; font-size: 12.5px;
+    font-family: Consolas, "Courier New", monospace; line-height: 1.6;
+    outline: none; resize: vertical; background: #fff; color: inherit;
+  }
+  .profile-body textarea:focus {
+    border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+  }
+  .profile-actions {
+    margin-top: 10px; display: flex; justify-content: flex-end;
+    align-items: center; gap: 12px;
+  }
+  .profile-actions .btn-primary { width: auto; padding: 7px 22px; }
+  .profile-footer {
+    padding: 12px 20px; border-top: 1px solid var(--border);
+    display: flex; justify-content: flex-end;
+  }
+  .profile-footer .btn-primary { width: auto; padding: 8px 28px; }
+  .report-prompt-text {
+    margin-top: 8px; font-size: 12.5px; color: var(--text-2);
+    white-space: pre-wrap; word-break: break-word;
+    background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px;
+  }
 
   /* 邮件表格 */
   .mail-filter { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -218,6 +352,24 @@
     border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
   }
   .mail-count { font-size: 12px; color: var(--text-3); margin-bottom: 8px; }
+  .mail-filter .btn-primary { width: auto; padding: 7px 16px; }
+  .mail-filter .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+  .mail-selected { font-size: 12px; color: var(--text-3); align-self: center; }
+  /* 「更多」下拉菜单 */
+  .more-wrap { position: relative; }
+  .more-menu {
+    position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 160px;
+    background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 4px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  }
+  .more-item {
+    display: block; width: 100%; text-align: left; border: none; background: none;
+    padding: 8px 12px; font-size: 13px; border-radius: 6px; color: var(--text);
+  }
+  .more-item:hover { background: #f3f4f6; }
+  .more-item.danger { color: var(--red); }
+  .more-item.danger:hover { background: var(--red-bg); }
+  .mail-table th.cb, .mail-table td.cb { width: 34px; text-align: center; }
   .mail-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
   .mail-table th {
     text-align: left; font-size: 12px; color: var(--text-3); font-weight: 600;
@@ -254,8 +406,9 @@
   .modal-head h3 { font-size: 15px; font-weight: 700; word-break: break-all; }
   .modal-close { border: none; background: none; font-size: 20px; color: var(--text-3); padding: 0 4px; line-height: 1; }
   .modal-close:hover { color: var(--text); }
-  .modal-meta { padding: 10px 20px; font-size: 12.5px; color: var(--text-2); border-bottom: 1px solid var(--border); line-height: 1.9; }
+  .modal-meta { padding: 10px 20px; font-size: 12.5px; color: var(--text-2); border-bottom: 1px solid var(--border); line-height: 1.9; white-space: pre-wrap; }
   .modal-body { padding: 16px 20px; overflow-y: auto; font-size: 13.5px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; }
+  .modal-body iframe { display: block; }
 
   /* 用户管理弹层 */
   .users-add { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -268,7 +421,6 @@
   }
   .users-add input { flex: 1; min-width: 120px; }
   .users-add .btn-primary { width: auto; padding: 7px 18px; }
-  .users-error { color: var(--red); font-size: 12.5px; margin-top: 8px; min-height: 1em; }
   .users-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
   .users-table th {
     text-align: left; font-size: 12px; color: var(--text-3); font-weight: 600;
@@ -287,30 +439,52 @@
   .msg.user { align-self: flex-end; background: var(--primary); color: #fff; white-space: pre-wrap; border-bottom-right-radius: 4px; }
   .msg.user code { background: rgba(255,255,255,.2); }
   .msg.assistant { align-self: flex-start; background: #fff; border: 1px solid var(--border); border-bottom-left-radius: 4px; }
-  .msg.assistant p { margin: 6px 0; }
-  .msg.assistant ul, .msg.assistant ol { padding-left: 20px; margin: 6px 0; }
-  .msg.assistant pre { background: #f3f4f6; padding: 10px; border-radius: 8px; overflow-x: auto; }
-  .msg.assistant code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
-  .msg.assistant h1, .msg.assistant h2, .msg.assistant h3 { margin: 10px 0 6px; font-size: 15px; }
-  .msg.assistant blockquote { border-left: 3px solid #d1d5db; padding-left: 10px; color: var(--text-2); margin: 6px 0; }
-  .msg.assistant table { border-collapse: collapse; margin: 6px 0; }
-  .msg.assistant th, .msg.assistant td { border: 1px solid var(--border); padding: 4px 8px; }
-  .chat-input-row { display: flex; gap: 10px; padding-top: 4px; }
-  .chat-input-row input {
-    flex: 1; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px;
-    font-size: 14px; outline: none; background: #fff;
+  /* 回复卡片底部操作条（存为报告） */
+  .msg-actions { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border); text-align: right; }
+  /* 输入区：一体化圆角框，文本在上、操作条在下（生成报告在左，发送在右） */
+  .chat-input-row {
+    display: flex; flex-direction: column; gap: 6px;
+    border: 1px solid #d1d5db; border-radius: 12px; background: #fff;
+    padding: 8px 10px;
   }
-  .chat-input-row input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
-  .chat-input-row button {
-    padding: 10px 22px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
-    background: var(--primary); color: #fff;
+  .chat-input-row:focus-within { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+  .chat-input-row textarea {
+    width: 100%; border: none; padding: 2px 4px; background: transparent; color: inherit;
+    font-size: 14px; outline: none; font-family: inherit;
+    line-height: 1.5; resize: none; max-height: 120px;
   }
-  .chat-input-row button:hover { background: var(--primary-dark); }
-  .chat-input-row button:disabled { background: #93c5fd; cursor: not-allowed; }
+  .chat-input-bar { display: flex; align-items: center; gap: 8px; }
+  #chat-send {
+    margin-left: auto; padding: 7px 22px; border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 600; background: var(--primary); color: #fff;
+  }
+  #chat-send:hover { background: var(--primary-dark); }
+  #chat-send:disabled { background: #93c5fd; cursor: not-allowed; }
   .chat-notice {
     background: #fffbeb; border: 1px solid #fde68a; color: #92400e;
     border-radius: 10px; padding: 14px 18px; font-size: 13px; max-width: 860px;
   }
+  .chat-notice .btn-primary { width: auto; padding: 6px 14px; font-size: 12.5px; margin-left: 10px; }
+  .chat-system {
+    align-self: center; font-size: 12px; color: var(--text-3);
+    background: #f3f4f6; border-radius: 999px; padding: 4px 14px;
+  }
+  /* 会话切换栏：下拉选择会话 + 新建 */
+  .session-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .session-bar select {
+    flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 8px;
+    background: #fff; font-size: 12.5px; color: var(--text-2); outline: none;
+  }
+  .session-bar .btn-ghost { white-space: nowrap; padding: 6px 12px; font-size: 12.5px; }
+  .chat-suggest { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0 8px; }
+  .chip-btn {
+    border: 1px solid var(--border); background: #fff; border-radius: 999px;
+    padding: 6px 14px; font-size: 12.5px; color: var(--text-2);
+  }
+  .chip-btn:hover { border-color: var(--primary); color: var(--primary); }
+  /* 动作型胶囊（如「生成报告」）：主色描边，与普通提问胶囊区分 */
+  .chip-action { border-color: var(--primary); color: var(--primary); font-weight: 600; }
+  .chip-action:disabled { opacity: .6; cursor: not-allowed; }
 
   /* 历史记录 */
   .session-block { max-width: 860px; margin-bottom: 28px; }
@@ -321,15 +495,230 @@
   .session-title::after { content: ""; flex: 1; height: 1px; background: var(--border); }
   .session-msgs { display: flex; flex-direction: column; gap: 12px; }
 
-  /* 响应式：窄屏时侧边栏折叠为顶部栏 */
-  @media (max-width: 860px) {
+  /* 管理控制台（admin 视图） */
+  #admin-view {
+    min-height: 100vh; display: flex; flex-direction: column;
+  }
+  .admin-header {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    background: #fff; border-bottom: 1px solid var(--border); padding: 14px 24px;
+    flex-wrap: wrap;
+  }
+  .admin-title { font-size: 16px; font-weight: 700; }
+  .admin-title::before {
+    content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 3px;
+    background: var(--primary); margin-right: 8px; vertical-align: 1px;
+  }
+  .admin-user { display: flex; align-items: center; gap: 10px; }
+  .admin-user .user-name { font-size: 13px; font-weight: 600; }
+  .admin-user .btn-small { flex: none; padding: 6px 14px; }
+  .admin-body {
+    flex: 1; width: 800px; max-width: 100%; margin: 0 auto; padding: 28px 24px 48px;
+  }
+  .admin-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px;
+  }
+  .admin-card h2 { font-size: 15px; font-weight: 700; margin-bottom: 16px; }
+
+  /* 系统设置 */
+  .settings-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .settings-row label { flex: 1; min-width: 200px; font-size: 13.5px; }
+  .settings-row input {
+    width: 140px; padding: 7px 11px; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: 13px; outline: none; background: #fff;
+  }
+  .settings-row input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+  .settings-row input.invalid { border-color: var(--red); box-shadow: 0 0 0 2px rgba(185,28,28,.12); }
+  .settings-row .hint { font-size: 12px; color: var(--text-3); }
+  .settings-footer { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+  .settings-footer .btn-primary { width: auto; padding: 8px 22px; }
+
+  /* 通用确认/输入对话框 */
+  .dlg { width: 400px; }
+  .dlg .modal-body { padding-bottom: 4px; white-space: pre-wrap; }
+  #dlg-input {
+    margin: 0 20px; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: 14px; outline: none;
+  }
+  #dlg-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+  .dlg-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px 16px; }
+  .dlg-footer .btn-primary, .dlg-footer .btn-ghost { width: auto; padding: 7px 18px; }
+  .btn-primary.danger { background: var(--red); }
+  .btn-primary.danger:hover { background: #991b1b; }
+
+  /* 全局 Toast 反馈 */
+  #toast-wrap {
+    position: fixed; top: 16px; right: 16px; z-index: 100;
+    display: flex; flex-direction: column; gap: 8px;
+    max-width: min(360px, calc(100vw - 32px));
+  }
+  .toast {
+    padding: 10px 16px; border-radius: 8px; font-size: 13px; background: #fff;
+    border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,.14);
+    animation: toast-in .2s ease;
+  }
+  .toast.ok { background: var(--green-light); border-color: #bbf7d0; color: var(--green); }
+  .toast.err { background: var(--red-bg); border-color: var(--red-border); color: var(--red); }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } }
+
+  /* 移动端邮件卡片（≤768px 由 JS 渲染，替代表格） */
+  .mail-mobile-bar { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); margin-bottom: 8px; }
+  .mail-mobile-bar input { width: 20px; height: 20px; }
+  .mail-card {
+    display: flex; gap: 10px; background: #fff; border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px; margin-bottom: 8px; cursor: pointer;
+  }
+  .mail-card .mc-cb { padding-top: 2px; flex-shrink: 0; }
+  .mail-card .mc-cb input { width: 20px; height: 20px; }
+  .mc-main { flex: 1; min-width: 0; }
+  .mc-row1 { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .mc-date { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+  .mc-subject { font-weight: 600; font-size: 14px; word-break: break-all; }
+  .mc-peer { font-size: 12px; color: var(--text-2); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mc-preview {
+    font-size: 12px; color: var(--text-3); margin-top: 4px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .mail-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; font-size: 12.5px; color: var(--text-2); }
+  .mail-pager .btn-ghost { width: auto; padding: 5px 14px; font-size: 12.5px; }
+
+  /* 响应式：平板（769-1024px）侧边栏变窄，其余保持桌面布局 */
+  @media (max-width: 1024px) and (min-width: 769px) {
+    #sidebar { width: 240px; }
+  }
+
+  /* 响应式：手机（≤768px）上下堆叠布局 */
+  @media (max-width: 768px) {
+    /* 分栏改堆叠：sidebar 变顶部区域，目标列表限高纵向滚动 */
     #app { flex-direction: column; height: auto; min-height: 100vh; }
     #sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: none; }
     #target-list { max-height: 180px; }
     #main { overflow: visible; }
     #workspace, .tab-pane { overflow: visible; }
-    #ws-header { flex-direction: column; }
+    /* tab 栏横向滚动不挤压 */
+    #tabs { overflow-x: auto; padding: 10px 12px 0; }
+    .tab { white-space: nowrap; }
+    .tab-pane { padding: 14px 12px 40px; }
+    /* 邮件表格：横向滚动容器，列保持可读宽度 */
+    #mail-table-wrap { overflow-x: auto; }
+    .mail-table { min-width: 640px; }
+    /* 工具条换行堆叠（flex-wrap 已有），按钮宽度自适应 */
+    .mail-filter .btn-primary, .mail-filter .btn-ghost { width: auto; }
+    /* 邮件详情弹窗接近全屏 */
+    .modal-mask { padding: 8px; }
+    .modal { width: 100%; max-height: 94vh; }
+    .modal-body { padding: 12px 14px; }
+    /* 个人中心表单单列 */
+    .profile-form { grid-template-columns: 1fr; }
+    /* 报告正文等取消桌面限宽 */
+    .markdown-body, .report-meta-wrap, .prompt-editor, .chat-wrap,
+    .session-block, .chat-notice { max-width: 100%; }
+    /* 对话输入行不溢出；输入框至少两行高，提示文字完整可见 */
+    #chat-send { padding: 10px 16px; }
+    .chat-input-row textarea { min-height: 62px; }
+    /* 管理控制台 */
+    .admin-body { width: 100%; padding: 16px 12px 40px; }
+    .admin-card { padding: 16px; }
+    .admin-header { padding: 12px 14px; }
+    #users-table-wrap { overflow-x: auto; }
+    .users-table { min-width: 560px; }
+    /* 触控友好：加大可点区域 */
+    button:not(.link-btn):not(.icon-btn), select, summary { min-height: 44px; }
+    input[type=checkbox] { min-width: 18px; min-height: 18px; }
+    .link-btn { padding: 6px 8px; }
+
+    /* 顶部应用栏（fixed） */
+    #appbar {
+      display: flex; position: fixed; top: 0; left: 0; right: 0; height: 52px;
+      align-items: center; gap: 10px; padding: 0 12px;
+      background: #fff; border-bottom: 1px solid var(--border); z-index: 45;
+    }
+    #drawer-open-btn { display: block; }
+    #appbar .chips { display: none; }
+    #appbar #ws-target { font-size: 15px; }
+    .appbar-btn {
+      border: none; background: none; font-size: 20px; line-height: 1;
+      padding: 6px 8px; color: var(--text); flex-shrink: 0;
+    }
+    /* 内容区给顶部应用栏留位 */
+    #app { padding-top: 52px; }
+
+    /* 抽屉式侧栏：左侧滑入 + 遮罩 */
+    #sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0; width: 80%; max-width: 320px;
+      z-index: 60; transform: translateX(-100%);
+      transition: transform .25s ease;
+      border-bottom: none; border-right: 1px solid var(--border);
+      box-shadow: 4px 0 24px rgba(0,0,0,.15);
+    }
+    #sidebar.open { transform: translateX(0); }
+    #drawer-mask {
+      display: block; position: fixed; inset: 0; background: rgba(15,23,42,.45);
+      z-index: 55; opacity: 0; pointer-events: none; transition: opacity .25s ease;
+    }
+    #drawer-mask.show { opacity: 1; pointer-events: auto; }
+    #target-list { max-height: none; }
+
+    /* 空状态：移动端内嵌分析入口与专属引导文案 */
+    .empty-hint-desktop { display: none; }
+    .empty-hint-mobile { display: block; }
+    .empty-analyze { display: block; }
+    /* iOS：输入框字号 ≥16px 防止聚焦自动缩放（属性选择器提升优先级压过桌面类选择器） */
+    input:not([type=checkbox]), select, textarea { font-size: 16px; }
+    /* 聊天页整屏独立滚动：154px = 应用栏52 + 页签栏48 + 面板上下 padding 54 */
+    .chat-wrap {
+      height: calc(100vh - 154px);
+      height: calc(100dvh - 154px);
+      min-height: 320px;
+    }
+    /* 触控无悬停，删除按钮常显 */
+    .target-del { opacity: 1; }
   }
+
+  /* ---------- 深色模式 ---------- */
+  [data-theme="dark"] {
+    --primary: #3b82f6; --primary-dark: #2563eb; --primary-light: #17293f;
+    --border: #374151; --text: #e5e7eb; --text-2: #9ca3af; --text-3: #6b7280;
+    --bg: #0b1220; --green: #4ade80; --green-light: #0f2e1c;
+    --red: #f87171; --red-bg: #3b0a0a; --red-border: #7f1d1d;
+  }
+  [data-theme="dark"] .login-card, [data-theme="dark"] #sidebar, [data-theme="dark"] .modal,
+  [data-theme="dark"] .admin-card, [data-theme="dark"] .admin-header, [data-theme="dark"] #appbar,
+  [data-theme="dark"] .chip, [data-theme="dark"] .btn-ghost, [data-theme="dark"] .chat-input-row,
+  [data-theme="dark"] .btn-small, [data-theme="dark"] .mail-table, [data-theme="dark"] .mail-card,
+  [data-theme="dark"] .msg.assistant, [data-theme="dark"] .report-meta-bar,
+  [data-theme="dark"] .report-prompt-text, [data-theme="dark"] .more-menu,
+  [data-theme="dark"] .chip-btn, [data-theme="dark"] .toast,
+  [data-theme="dark"] .report-toolbar select, [data-theme="dark"] .mail-filter select,
+  [data-theme="dark"] .session-bar select,
+  [data-theme="dark"] .mail-filter input, [data-theme="dark"] .users-add input,
+  [data-theme="dark"] .users-add select, [data-theme="dark"] .settings-row input,
+  [data-theme="dark"] .chat-input-row textarea, [data-theme="dark"] .prompt-editor textarea,
+  [data-theme="dark"] .profile-body textarea, [data-theme="dark"] .profile-form input,
+  [data-theme="dark"] .target-search input, [data-theme="dark"] .analyze-box input,
+  [data-theme="dark"] .login-card input, [data-theme="dark"] #dlg-input {
+    background: #151d2b; color: var(--text); border-color: #4b5563;
+  }
+  [data-theme="dark"] .mail-table th { background: #1b2636; }
+  [data-theme="dark"] .mail-table tbody tr:hover, [data-theme="dark"] .target-item:hover,
+  [data-theme="dark"] .btn-ghost:hover, [data-theme="dark"] .btn-small:hover,
+  [data-theme="dark"] .btn-icon:hover, [data-theme="dark"] .more-item:hover { background: #1f2a3a; }
+  [data-theme="dark"] .mail-table td { border-bottom-color: #22304a; }
+  [data-theme="dark"] .target-item.active { background: #17293f; border-color: #2d4a6f; }
+  [data-theme="dark"] .markdown-body code, [data-theme="dark"] .msg.assistant code { background: #22304a; }
+  [data-theme="dark"] .markdown-body pre, [data-theme="dark"] .msg.assistant pre { background: #111a28; }
+  [data-theme="dark"] .markdown-body th, [data-theme="dark"] .markdown-body td,
+  [data-theme="dark"] .msg.assistant th, [data-theme="dark"] .msg.assistant td { border-color: var(--border); }
+  [data-theme="dark"] .markdown-body blockquote, [data-theme="dark"] .msg.assistant blockquote { border-left-color: #4b5563; }
+  [data-theme="dark"] .chat-system { background: #22304a; }
+  [data-theme="dark"] .role-badge.user { background: #22304a; color: var(--text-2); }
+  [data-theme="dark"] .role-badge.admin { background: #3a2a10; color: #fbbf24; }
+  [data-theme="dark"] .chat-notice { background: #3a2f10; border-color: #6b5518; color: #fbbf24; }
+  [data-theme="dark"] .prompt-dirty { background: #3a2a10; color: #fbbf24; }
+  [data-theme="dark"] .spinner { border-color: #4b5563; border-top-color: var(--primary); }
+  [data-theme="dark"] .modal-mask, [data-theme="dark"] #drawer-mask { background: rgba(0,0,0,.6); }
+  [data-theme="dark"] .sess-badge { background: #0f2e1c; }
 </style>
 </head>
 <body>
@@ -339,12 +728,16 @@
     <div class="login-sub">IMAP 抓取 · AI 分析 · 会话追问</div>
     <div id="login-error" class="login-error hidden"></div>
     <input type="text" id="login-username" placeholder="用户名" autocomplete="username">
-    <input type="password" id="login-password" placeholder="密码" autocomplete="current-password">
+    <div class="pwd-wrap">
+      <input type="password" id="login-password" placeholder="密码" autocomplete="current-password">
+      <button type="button" id="pwd-toggle" title="显示密码">👁</button>
+    </div>
     <button id="login-btn" class="btn-primary">登 录</button>
+    <div class="login-tip">忘记密码？请联系管理员重置</div>
   </div>
 </div>
 
-<div id="app" class="hidden">
+<div id="app" class="hidden no-target">
   <aside id="sidebar">
     <div class="brand">
       <div class="brand-name">邮件分析助手</div>
@@ -352,30 +745,43 @@
     </div>
     <div class="analyze-box">
       <input type="email" id="email-input" placeholder="输入要分析的邮箱地址">
-      <button id="analyze-btn" class="btn-primary">开始分析</button>
+      <button id="analyze-btn" class="btn-primary">新建分析</button>
       <div id="progress" class="progress hidden">
         <div class="spinner"></div>
         <span id="progress-text">正在抓取邮件…</span>
+        <button id="analyze-cancel" class="link-btn">取消</button>
       </div>
     </div>
     <div class="target-list-head">
-      <span>分析目标</span>
+      <span>邮箱列表</span>
+      <button id="theme-toggle" class="btn-icon" title="切换深色模式">🌙</button>
       <button id="refresh-targets" class="btn-icon" title="刷新列表">⟳</button>
     </div>
+    <div class="target-search"><input type="text" id="target-search" placeholder="搜索邮箱…"></div>
     <div id="target-list"></div>
     <div class="sidebar-footer">
       <div class="user-row">
         <span class="user-name" id="user-name"></span>
         <span class="role-badge" id="user-role"></span>
+        <button id="profile-btn" class="icon-btn plain profile-btn" title="个人中心" aria-label="个人中心">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+        </button>
       </div>
       <div class="footer-btns">
-        <button id="users-btn" class="btn-small hidden">用户管理</button>
+        <button id="console-btn" class="btn-small hidden">管理控制台</button>
         <button id="logout-btn" class="btn-small">退出登录</button>
       </div>
     </div>
   </aside>
 
   <main id="main">
+    <header id="appbar">
+      <button id="drawer-open-btn" class="appbar-btn" title="菜单">☰</button>
+      <h1 id="ws-target">邮件分析助手</h1>
+      <div id="ws-chips" class="chips"></div>
+    </header>
     <div id="error-banner" class="hidden">
       <span id="error-text"></span>
       <button id="error-close" title="关闭">×</button>
@@ -384,34 +790,56 @@
     <div id="empty-state">
       <div class="icon">📬</div>
       <h2>开始一次邮件分析</h2>
-      <p>在左侧输入对方邮箱地址并点击「开始分析」，<br>或从目标列表中选择已分析过的邮箱。</p>
+      <p class="empty-hint-desktop">在左侧输入对方邮箱地址并点击「新建分析」，<br>或从目标列表中选择已抓取过的邮箱。</p>
+      <p class="empty-hint-mobile">输入对方邮箱地址开始分析，<br>或点左上角 ☰ 选择已分析过的邮箱。</p>
+      <div class="empty-analyze">
+        <input type="email" id="empty-email-input" placeholder="输入要分析的邮箱地址">
+        <button id="empty-analyze-btn" class="btn-primary">开始分析</button>
+      </div>
     </div>
 
     <div id="workspace" class="hidden">
-      <header id="ws-header">
-        <div>
-          <h1 id="ws-target"></h1>
-          <div id="ws-chips" class="chips"></div>
-        </div>
-        <div class="ws-actions">
-          <button id="reanalyze-btn" class="btn-ghost">重新分析</button>
-          <button id="reset-btn" class="btn-ghost">重置会话</button>
-          <button id="export-btn" class="btn-ghost">导出报告</button>
-        </div>
-      </header>
-
       <nav id="tabs">
-        <button class="tab active" data-tab="report">分析报告</button>
+        <button class="tab active" data-tab="chat">对话追问</button>
+        <button class="tab" data-tab="report">分析报告</button>
         <button class="tab" data-tab="emails">往来邮件</button>
-        <button class="tab" data-tab="chat">对话追问</button>
-        <button class="tab" data-tab="history">历史记录</button>
       </nav>
 
-      <section id="tab-report" class="tab-pane">
+      <section id="tab-report" class="tab-pane hidden">
         <div class="report-toolbar">
           <select id="report-version" class="hidden"></select>
-          <button id="new-report-btn" class="btn-primary">生成新报告</button>
-          <span id="report-hint" class="report-hint"></span>
+          <button id="report-del-btn" class="icon-btn hidden" title="删除本版" aria-label="删除本版">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+            </svg>
+          </button>
+          <button id="export-btn" class="icon-btn plain" style="margin-left: auto;" title="导出报告" aria-label="导出报告">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/>
+            </svg>
+          </button>
+        </div>
+        <details id="prompt-editor" class="prompt-editor">
+          <summary>报告生成要求（展开查看默认提示词，可修改）<span id="prompt-dirty" class="prompt-dirty hidden">已自定义</span></summary>
+          <textarea id="prompt-textarea" rows="8" spellcheck="false"
+                    placeholder="正在加载默认提示词…"></textarea>
+          <div class="prompt-editor-footer">
+            <span class="prompt-tip">修改将在下次生成报告时生效</span>
+            <button id="prompt-reset-btn" class="link-btn">恢复默认</button>
+          </div>
+        </details>
+        <div id="report-meta-wrap" class="report-meta-wrap hidden">
+          <div class="report-meta-bar"><span id="report-meta-text"></span></div>
+          <details id="report-history-details" class="report-history">
+            <summary>会话履历</summary>
+            <div id="report-history-list" class="report-history-list"></div>
+          </details>
+          <details id="report-prompt-details" class="report-history hidden">
+            <summary>本次生成要求</summary>
+            <div id="report-prompt-text" class="report-prompt-text"></div>
+          </details>
         </div>
         <div id="report-content"></div>
       </section>
@@ -423,29 +851,96 @@
             <option value="收到">收到</option>
             <option value="发出">发送</option>
           </select>
-          <input type="text" id="mail-keyword" placeholder="搜索主题 / 收发人 / 预览…">
+          <input type="text" id="mail-keyword" placeholder="搜索邮件…">
+          <button id="session-btn" class="btn-primary" title="默认使用全部往来邮件；勾选部分邮件可缩小提问范围">开始提问</button>
+          <span id="mail-selected-count" class="mail-selected"></span>
+          <button id="fetch-btn" class="btn-ghost">同步新邮件</button>
+          <div class="more-wrap">
+            <button id="more-btn" class="btn-ghost" title="更多操作">⋯</button>
+            <div id="more-menu" class="more-menu hidden">
+              <button id="reanalyze-btn" class="more-item">重新抓取并分析</button>
+              <button id="reset-btn" class="more-item danger">重置会话</button>
+            </div>
+          </div>
         </div>
         <div class="mail-count" id="mail-count"></div>
         <div id="mail-table-wrap"></div>
       </section>
 
-      <section id="tab-chat" class="tab-pane hidden">
-        <div id="chat-notice" class="chat-notice hidden">该邮箱暂无进行中的会话，发起分析后可追问。</div>
+      <section id="tab-chat" class="tab-pane">
+        <div id="chat-notice" class="chat-notice hidden">该邮箱暂无进行中的会话。<button id="chat-resume-btn" class="btn-primary">用已抓取的邮件恢复对话</button></div>
         <div id="chat-area" class="chat-wrap hidden">
+          <div class="session-bar">
+            <select id="session-select" title="切换会话"></select>
+            <button id="session-new-btn" class="btn-ghost">＋新建会话</button>
+          </div>
           <div id="chat-log" class="chat-log"></div>
+          <div id="chat-suggest" class="chat-suggest hidden">
+            <button class="chip-btn">总结最近的合作进展和待办</button>
+            <button class="chip-btn">对方有哪些未兑现的承诺或风险点？</button>
+            <button class="chip-btn">最近一封邮件的重点是什么？</button>
+          </div>
           <div class="chat-input-row">
-            <input type="text" id="chat-input" placeholder="围绕这些邮件继续提问，例如：上次报价是多少？">
-            <button id="chat-send">发送</button>
+            <textarea id="chat-input" rows="1" placeholder="继续提问，例如：上次报价是多少？（Enter 发送，Shift+Enter 换行）"></textarea>
+            <div class="chat-input-bar">
+              <button id="new-report-btn" class="chip-btn chip-action">生成报告</button>
+              <button id="chat-send">发送</button>
+            </div>
           </div>
         </div>
       </section>
-
-      <section id="tab-history" class="tab-pane hidden">
-        <div id="history-content"></div>
-      </section>
     </div>
   </main>
+  <div id="drawer-mask"></div>
 </div>
+
+<div id="admin-view" class="hidden">
+  <header class="admin-header">
+    <div class="admin-title">邮件分析助手 · 管理控制台</div>
+    <div class="admin-user">
+      <span class="user-name" id="admin-user-name"></span>
+      <span class="role-badge admin">管理员</span>
+      <button id="admin-enter-app" class="btn-small">进入工作台</button>
+      <button id="admin-logout-btn" class="btn-small">退出登录</button>
+    </div>
+  </header>
+  <div class="admin-body">
+    <div class="admin-card">
+      <h2>用户管理</h2>
+      <div class="users-add">
+        <input type="text" id="add-username" placeholder="用户名（2-32 位）" autocomplete="off">
+        <input type="password" id="add-password" placeholder="密码（至少 6 位）" autocomplete="new-password">
+        <select id="add-role">
+          <option value="user">普通用户</option>
+          <option value="admin">管理员</option>
+        </select>
+        <button id="add-user-btn" class="btn-primary">添加</button>
+      </div>
+      <div id="users-table-wrap"></div>
+    </div>
+    <div class="admin-card" style="margin-top: 20px;">
+      <h2>系统设置</h2>
+      <div id="settings-form"></div>
+      <div class="settings-footer">
+        <button id="settings-save-btn" class="btn-primary">保存设置</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="dlg-mask" class="modal-mask hidden">
+  <div class="modal dlg">
+    <div class="modal-head"><h3 id="dlg-title"></h3></div>
+    <div class="modal-body" id="dlg-body"></div>
+    <input id="dlg-input" class="hidden">
+    <div class="dlg-footer">
+      <button id="dlg-cancel" class="btn-ghost">取消</button>
+      <button id="dlg-ok" class="btn-primary">确定</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-wrap"></div>
 
 <div id="email-modal-mask" class="modal-mask hidden">
   <div class="modal">
@@ -458,24 +953,52 @@
   </div>
 </div>
 
-<div id="users-modal-mask" class="modal-mask hidden">
-  <div class="modal">
+<div id="profile-modal-mask" class="modal-mask hidden">
+  <div class="modal profile-modal">
     <div class="modal-head">
-      <h3>用户管理</h3>
-      <button class="modal-close" id="users-close" title="关闭">×</button>
+      <h3>个人中心</h3>
+      <button class="modal-close" id="profile-close" title="关闭">×</button>
     </div>
-    <div class="modal-body" style="white-space: normal;">
-      <div class="users-add">
-        <input type="text" id="add-username" placeholder="用户名（2-32 位）" autocomplete="off">
-        <input type="password" id="add-password" placeholder="密码（至少 6 位）" autocomplete="new-password">
-        <select id="add-role">
-          <option value="user">普通用户</option>
-          <option value="admin">管理员</option>
-        </select>
-        <button id="add-user-btn" class="btn-primary">添加</button>
+    <div class="modal-body profile-body">
+      <div class="profile-section">
+        <div class="profile-section-head">
+          <h4>邮箱设置（IMAP）</h4>
+          <span id="profile-mail-customized" class="prompt-dirty hidden">已自定义</span>
+        </div>
+        <p class="profile-hint">用于抓取你的往来邮件；留空的项使用系统默认，邮箱密码保存后不回显（填写则覆盖）。「测试连接」直接使用当前填写的内容。</p>
+        <div class="profile-form">
+          <label>邮箱地址<input type="email" id="profile-mail-address" autocomplete="off"></label>
+          <label>邮箱密码<input type="password" id="profile-mail-password" autocomplete="new-password"></label>
+          <label>IMAP 服务器<input type="text" id="profile-mail-host" autocomplete="off"></label>
+          <label>IMAP 端口<input type="number" id="profile-mail-port" min="1" max="65535"></label>
+        </div>
+        <div class="profile-actions">
+          <button id="profile-mail-test-btn" class="btn-ghost">测试连接</button>
+        </div>
       </div>
-      <div id="users-error" class="users-error"></div>
-      <div id="users-table-wrap"></div>
+      <div class="profile-section">
+        <div class="profile-section-head">
+          <h4>报告默认提示词</h4>
+          <span id="profile-customized" class="prompt-dirty hidden">已自定义</span>
+        </div>
+        <p class="profile-hint">生成报告时默认使用这份要求，在「分析报告」页仍可针对单次生成临时修改。</p>
+        <textarea id="profile-prompt" rows="10" spellcheck="false"
+                  placeholder="正在加载…"></textarea>
+        <div class="profile-actions">
+          <button id="profile-reset-btn" class="link-btn">恢复系统默认</button>
+        </div>
+      </div>
+      <div class="profile-section">
+        <div class="profile-section-head"><h4>修改密码</h4></div>
+        <p class="profile-hint">不修改密码请留空；填写后随「保存」一并提交。</p>
+        <div class="profile-form">
+          <label>新密码<input type="password" id="profile-new-password" placeholder="至少 6 位" autocomplete="new-password"></label>
+          <label>确认新密码<input type="password" id="profile-new-password2" autocomplete="new-password"></label>
+        </div>
+      </div>
+    </div>
+    <div class="profile-footer">
+      <button id="profile-save-btn" class="btn-primary">保存</button>
     </div>
   </div>
 </div>
@@ -488,48 +1011,98 @@ const $ = (id) => document.getElementById(id);
 const el = {
   loginView: $("login-view"), loginUsername: $("login-username"),
   loginPassword: $("login-password"), loginBtn: $("login-btn"), loginError: $("login-error"),
+  pwdToggle: $("pwd-toggle"),
   app: $("app"),
   userName: $("user-name"), userRole: $("user-role"),
-  usersBtn: $("users-btn"), logoutBtn: $("logout-btn"),
+  logoutBtn: $("logout-btn"),
+  adminView: $("admin-view"), adminUserName: $("admin-user-name"),
+  adminLogoutBtn: $("admin-logout-btn"), adminEnterApp: $("admin-enter-app"),
+  consoleBtn: $("console-btn"),
   emailInput: $("email-input"), analyzeBtn: $("analyze-btn"),
   progress: $("progress"), progressText: $("progress-text"),
+  analyzeCancel: $("analyze-cancel"),
   targetList: $("target-list"), refreshTargets: $("refresh-targets"),
+  themeToggle: $("theme-toggle"),
+  targetSearch: $("target-search"),
   errorBanner: $("error-banner"), errorText: $("error-text"), errorClose: $("error-close"),
+  toastWrap: $("toast-wrap"),
+  dlgMask: $("dlg-mask"), dlgTitle: $("dlg-title"), dlgBody: $("dlg-body"),
+  dlgInput: $("dlg-input"), dlgOk: $("dlg-ok"), dlgCancel: $("dlg-cancel"),
   emptyState: $("empty-state"), workspace: $("workspace"),
   wsTarget: $("ws-target"), wsChips: $("ws-chips"),
   reanalyzeBtn: $("reanalyze-btn"), resetBtn: $("reset-btn"), exportBtn: $("export-btn"),
   tabs: document.querySelectorAll("#tabs .tab"),
+  sidebar: $("sidebar"), drawerMask: $("drawer-mask"),
+  drawerOpenBtn: $("drawer-open-btn"),
   panes: {
     report: $("tab-report"), emails: $("tab-emails"),
-    chat: $("tab-chat"), history: $("tab-history"),
+    chat: $("tab-chat"),
   },
   reportContent: $("report-content"), reportVersion: $("report-version"),
-  newReportBtn: $("new-report-btn"), reportHint: $("report-hint"),
+  newReportBtn: $("new-report-btn"),
+  reportDelBtn: $("report-del-btn"),
+  reportMetaWrap: $("report-meta-wrap"), reportMetaText: $("report-meta-text"),
+  reportHistoryDetails: $("report-history-details"),
+  reportHistoryList: $("report-history-list"),
+  reportPromptDetails: $("report-prompt-details"),
+  reportPromptText: $("report-prompt-text"),
+  promptEditor: $("prompt-editor"), promptTextarea: $("prompt-textarea"),
+  promptResetBtn: $("prompt-reset-btn"), promptDirty: $("prompt-dirty"),
   mailDirection: $("mail-direction"), mailKeyword: $("mail-keyword"),
   mailCount: $("mail-count"), mailTableWrap: $("mail-table-wrap"),
+  sessionBtn: $("session-btn"), mailSelectedCount: $("mail-selected-count"),
+  fetchBtn: $("fetch-btn"), moreBtn: $("more-btn"), moreMenu: $("more-menu"),
   chatNotice: $("chat-notice"), chatArea: $("chat-area"),
+  chatResumeBtn: $("chat-resume-btn"),
+  sessionSelect: $("session-select"), sessionNewBtn: $("session-new-btn"),
+  emptyEmailInput: $("empty-email-input"), emptyAnalyzeBtn: $("empty-analyze-btn"),
   chatLog: $("chat-log"), chatInput: $("chat-input"), chatSend: $("chat-send"),
-  historyContent: $("history-content"),
+  chatSuggest: $("chat-suggest"),
   modalMask: $("email-modal-mask"), modalSubject: $("modal-subject"),
   modalMeta: $("modal-meta"), modalBody: $("modal-body"), modalClose: $("modal-close"),
-  usersMask: $("users-modal-mask"), usersClose: $("users-close"),
   addUsername: $("add-username"), addPassword: $("add-password"),
   addRole: $("add-role"), addUserBtn: $("add-user-btn"),
-  usersError: $("users-error"), usersTableWrap: $("users-table-wrap"),
+  usersTableWrap: $("users-table-wrap"),
+  settingsForm: $("settings-form"),
+  settingsSaveBtn: $("settings-save-btn"),
+  profileBtn: $("profile-btn"), profileMask: $("profile-modal-mask"),
+  profileClose: $("profile-close"), profilePrompt: $("profile-prompt"),
+  profileCustomized: $("profile-customized"),
+  profileSaveBtn: $("profile-save-btn"), profileResetBtn: $("profile-reset-btn"),
+  profileMailCustomized: $("profile-mail-customized"),
+  profileMailAddress: $("profile-mail-address"),
+  profileMailPassword: $("profile-mail-password"),
+  profileMailHost: $("profile-mail-host"), profileMailPort: $("profile-mail-port"),
+  profileMailTestBtn: $("profile-mail-test-btn"),
+  profileNewPassword: $("profile-new-password"),
+  profileNewPassword2: $("profile-new-password2"),
 };
+
+const MAIL_PAGE_SIZE = 50;
 
 const state = {
   me: null,           // 当前登录用户 {username, role}
   target: null,
   targets: [],
-  tab: "report",
+  tab: "chat",
+  targetName: "",
   reports: null,      // 当前目标的报告版本列表 [{version, time, content}]
   currentVersion: null, // 当前选中的报告版本号
   emails: null,       // 当前目标的邮件列表缓存
-  sessions: null,     // 当前目标的历史会话缓存
+  checked: new Set(), // 往来邮件勾选的邮件 idx 集合
+  liveMessages: 0,
   hasSession: false,
+  activeSession: null, // 活跃会话块下标（对应历史 sessions 数组）
   analyzing: false,
+  analyzeStart: 0,
+  analyzeJobId: null,
+  fetchJobId: null,
+  fetchTimer: null,
+  mailPage: 0,
+  fetching: false,    // 「同步新邮件」任务进行中
   pollTimer: null,
+  chatWaiting: false,
+  chatAbort: null,
 };
 
 function targetKey() {
@@ -542,11 +1115,94 @@ async function fetchJson(url, options) {
   const resp = await fetch(url, options);
   const contentType = resp.headers.get("Content-Type") || "";
   if (!contentType.includes("application/json")) {
-    throw new Error(`服务异常（HTTP ${resp.status}），请确认服务已重启`);
+    throw new Error(`服务异常（HTTP ${resp.status}），请稍后重试或联系管理员`);
   }
   const data = await resp.json();
-  if (resp.status === 401 && url !== "/api/login") showLogin();
+  if (resp.status === 401 && url !== "/api/login") showLogin("登录已过期，请重新登录");
   return { ok: resp.ok, status: resp.status, data };
+}
+
+// 流式 POST：逐块回调 onDelta(累积全文)，返回完整文本；JSON 错误抛出带 status 的 Error
+async function streamPost(url, body, signal, onDelta) {
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  const contentType = resp.headers.get("Content-Type") || "";
+  if (!resp.ok || !contentType.includes("text/plain")) {
+    let msg = `服务异常（HTTP ${resp.status}），请稍后重试或联系管理员`;
+    try { msg = (await resp.json()).error || msg; } catch (e) { /* 保留默认提示 */ }
+    const err = new Error(msg);
+    err.status = resp.status;
+    throw err;
+  }
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let full = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    full += decoder.decode(value, { stream: true });
+    onDelta(full);
+  }
+  return full;
+}
+
+// 流式期间每 100ms 重渲染一次 Markdown，避免每块都全文解析
+function throttledRenderer(node) {
+  let latest = "", timer = null;
+  const flush = () => {
+    timer = null;
+    renderMarkdown(node, latest);
+    if (el.chatLog.contains(node)) { el.chatLog.scrollTop = el.chatLog.scrollHeight; }
+  };
+  return {
+    push(text) { latest = text; if (!timer) timer = setTimeout(flush, 100); },
+    flush() { if (timer) { clearTimeout(timer); } flush(); },
+  };
+}
+
+// 通用对话框：Promise 风格；input 模式 resolve 输入值，确认模式 resolve true；取消均 resolve null
+function showDialog({ title, body, input, confirmText, danger }) {
+  return new Promise((resolve) => {
+    el.dlgTitle.textContent = title || "确认";
+    el.dlgBody.textContent = body || "";
+    el.dlgBody.classList.toggle("hidden", !body);
+    el.dlgInput.classList.toggle("hidden", !input);
+    el.dlgInput.value = "";
+    if (input) {
+      el.dlgInput.type = input.type || "text";
+      el.dlgInput.placeholder = input.placeholder || "";
+    }
+    el.dlgOk.textContent = confirmText || "确定";
+    el.dlgOk.classList.toggle("danger", !!danger);
+    el.dlgMask.classList.remove("hidden");
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.stopPropagation(); done(null); }
+      if (e.key === "Enter" && input) { done(el.dlgInput.value); }
+    };
+    const done = (val) => {
+      document.removeEventListener("keydown", onKey, true);
+      el.dlgMask.classList.add("hidden");
+      resolve(val);
+    };
+    document.addEventListener("keydown", onKey, true);
+    el.dlgOk.onclick = () => done(input ? el.dlgInput.value : true);
+    el.dlgCancel.onclick = () => done(null);
+    el.dlgMask.onclick = (e) => { if (e.target === el.dlgMask) done(null); };
+    (input ? el.dlgInput : el.dlgOk).focus();
+  });
+}
+
+// 全局 Toast：右上角浮层，3.2 秒自动消失；操作成败反馈统一走这里
+function toast(msg, isErr) {
+  const div = document.createElement("div");
+  div.className = "toast" + (isErr ? " err" : " ok");
+  div.textContent = msg;
+  el.toastWrap.appendChild(div);
+  setTimeout(() => div.remove(), 3200);
 }
 
 function showError(msg) {
@@ -558,7 +1214,9 @@ function showError(msg) {
 function renderMarkdown(node, text) {
   if (window.marked) {
     node.classList.add("markdown-body");
-    node.innerHTML = marked.parse(text || "");
+    const html = marked.parse(text || "");
+    // 邮件内容可能诱导模型输出恶意 HTML，渲染前统一消毒
+    node.innerHTML = window.DOMPurify ? DOMPurify.sanitize(html) : html;
   } else {
     node.style.whiteSpace = "pre-wrap";
     node.textContent = text || "";
@@ -577,11 +1235,15 @@ function fmtShort(iso) {
 
 function showLogin(msg) {
   if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+  if (state.fetchTimer) { clearInterval(state.fetchTimer); state.fetchTimer = null; }
   state.me = null;
   state.target = null;
   state.targets = [];
   state.analyzing = false;
+  document.body.style.overflow = ""; // 防止抽屉打开时 401 导致背景锁定残留
   el.app.classList.add("hidden");
+  el.app.classList.add("no-target");
+  el.adminView.classList.add("hidden");
   el.loginView.classList.remove("hidden");
   el.loginError.classList.toggle("hidden", !msg);
   el.loginError.textContent = msg || "";
@@ -592,13 +1254,31 @@ function showLogin(msg) {
 function showMain(user) {
   state.me = user;
   el.loginView.classList.add("hidden");
+  el.adminView.classList.add("hidden");
+  el.app.classList.add("hidden");
+  if (user.role === "admin") {
+    // 管理员默认进管理控制台，可再通过「进入工作台」切换到分析界面
+    el.adminView.classList.remove("hidden");
+    el.adminUserName.textContent = user.username;
+    el.adminUserName.title = user.username;
+    loadUsers();
+    loadSettings();
+    return;
+  }
+  enterWorkspace();
+}
+
+// 普通用户登录后、或管理员点「进入工作台」时进入分析工作台
+function enterWorkspace() {
+  const user = state.me;
+  el.adminView.classList.add("hidden");
   el.app.classList.remove("hidden");
   el.userName.textContent = user.username;
   el.userName.title = user.username;
-  const isAdmin = user.role === "admin";
-  el.userRole.textContent = isAdmin ? "管理员" : "普通用户";
-  el.userRole.className = "role-badge " + (isAdmin ? "admin" : "user");
-  el.usersBtn.classList.toggle("hidden", !isAdmin);
+  el.wsTarget.textContent = "邮件分析助手";
+  el.userRole.textContent = user.role === "admin" ? "管理员" : "普通用户";
+  el.userRole.className = "role-badge " + (user.role === "admin" ? "admin" : "user");
+  el.consoleBtn.classList.toggle("hidden", user.role !== "admin");
   loadTargets().then(() => {
     const saved = localStorage.getItem(targetKey());
     if (saved && state.targets.some((t) => t.target === saved)) {
@@ -640,26 +1320,30 @@ async function doLogin() {
 el.loginBtn.addEventListener("click", doLogin);
 el.loginUsername.addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
 el.loginPassword.addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
-
-el.logoutBtn.addEventListener("click", async () => {
-  try { await fetchJson("/api/logout", { method: "POST" }); } catch (e) { /* 忽略 */ }
-  showLogin();
+el.pwdToggle.addEventListener("click", () => {
+  const show = el.loginPassword.type === "password";
+  el.loginPassword.type = show ? "text" : "password";
+  el.pwdToggle.title = show ? "隐藏密码" : "显示密码";
 });
 
-// ---------- 用户管理（admin） ----------
-
-function usersShowError(msg) { el.usersError.textContent = msg || ""; }
-
-function openUsersModal() {
-  usersShowError("");
-  el.usersMask.classList.remove("hidden");
-  loadUsers();
+async function doLogout() {
+  try { await fetchJson("/api/logout", { method: "POST" }); } catch (e) { /* 忽略 */ }
+  showLogin();
 }
 
-function closeUsersModal() { el.usersMask.classList.add("hidden"); }
-el.usersBtn.addEventListener("click", openUsersModal);
-el.usersClose.addEventListener("click", closeUsersModal);
-el.usersMask.addEventListener("click", (e) => { if (e.target === el.usersMask) closeUsersModal(); });
+el.logoutBtn.addEventListener("click", doLogout);
+el.adminLogoutBtn.addEventListener("click", doLogout);
+el.adminEnterApp.addEventListener("click", enterWorkspace);
+el.consoleBtn.addEventListener("click", () => {
+  el.app.classList.add("hidden");
+  el.adminView.classList.remove("hidden");
+  loadUsers();
+  loadSettings();
+});
+
+// ---------- 用户管理（admin 控制台） ----------
+
+function usersShowError(msg) { if (msg) toast(msg, true); }
 
 async function loadUsers() {
   try {
@@ -740,6 +1424,7 @@ async function addUser() {
     if (!ok) { usersShowError(data.error || "添加失败"); return; }
     el.addUsername.value = "";
     el.addPassword.value = "";
+    toast("已添加用户 " + username);
     loadUsers();
   } catch (e) {
     usersShowError(e.message);
@@ -749,8 +1434,12 @@ async function addUser() {
 el.addUserBtn.addEventListener("click", addUser);
 
 async function resetUserPassword(username) {
-  const password = prompt(`为用户「${username}」设置新密码（至少 6 位）：`);
+  const password = await showDialog({
+    title: "重置密码", body: `为用户「${username}」设置新密码`,
+    input: { type: "password", placeholder: "至少 6 位" }, confirmText: "重置",
+  });
   if (password === null) return;
+  if (!password.trim()) { toast("密码不能为空", true); return; }
   usersShowError("");
   try {
     const { ok, data } = await fetchJson(
@@ -762,6 +1451,7 @@ async function resetUserPassword(username) {
       }
     );
     if (!ok) { usersShowError(data.error || "重置密码失败"); return; }
+    toast("密码已重置");
     loadUsers();
   } catch (e) {
     usersShowError(e.message);
@@ -781,6 +1471,7 @@ async function toggleUserRole(username, currentRole) {
       }
     );
     if (!ok) { usersShowError(data.error || "修改角色失败"); return; }
+    toast("角色已更新");
     loadUsers();
   } catch (e) {
     usersShowError(e.message);
@@ -788,7 +1479,7 @@ async function toggleUserRole(username, currentRole) {
 }
 
 async function deleteUser(username) {
-  if (!confirm(`确定要删除用户「${username}」吗？该操作不可恢复。`)) return;
+  if (!await showDialog({ title: "删除用户", body: `确定要删除用户「${username}」吗？该操作不可恢复。`, danger: true, confirmText: "删除" })) return;
   usersShowError("");
   try {
     const { ok, data } = await fetchJson(
@@ -796,11 +1487,101 @@ async function deleteUser(username) {
       { method: "DELETE" }
     );
     if (!ok) { usersShowError(data.error || "删除失败"); return; }
+    toast("已删除用户 " + username);
     loadUsers();
   } catch (e) {
     usersShowError(e.message);
   }
 }
+
+// ---------- 系统设置（admin 控制台） ----------
+
+const SETTINGS_HINTS = {
+  mail_lookback_days: "0 表示不限",
+  mail_max_results: "0 表示不限",
+};
+
+function settingsShowMsg(msg, isErr) { if (msg) toast(msg, isErr); }
+
+async function loadSettings() {
+  el.settingsForm.innerHTML = "";
+  settingsShowMsg("");
+  try {
+    const { ok, data } = await fetchJson("/api/settings");
+    if (!ok) { settingsShowMsg(data.error || "设置加载失败", true); return; }
+    renderSettings(data.settings || []);
+  } catch (e) {
+    settingsShowMsg(e.message, true);
+  }
+}
+
+function renderSettings(settings) {
+  el.settingsForm.innerHTML = "";
+  if (!settings.length) {
+    el.settingsForm.innerHTML = '<div class="pane-empty">暂无设置项</div>';
+    return;
+  }
+  for (const item of settings) {
+    const row = document.createElement("div");
+    row.className = "settings-row";
+
+    const label = document.createElement("label");
+    label.textContent = item.label;
+
+    const input = document.createElement("input");
+    input.type = "number";
+    input.value = item.value;
+    input.min = item.minimum;
+    input.step = "1";
+    input.dataset.key = item.key;
+    input.dataset.minimum = item.minimum;
+    input.dataset.label = item.label;
+    input.addEventListener("input", () => input.classList.remove("invalid"));
+
+    row.append(label, input);
+    if (SETTINGS_HINTS[item.key]) {
+      const hint = document.createElement("span");
+      hint.className = "hint";
+      hint.textContent = SETTINGS_HINTS[item.key];
+      row.appendChild(hint);
+    }
+    el.settingsForm.appendChild(row);
+  }
+}
+
+el.settingsSaveBtn.addEventListener("click", async () => {
+  const inputs = el.settingsForm.querySelectorAll("input[data-key]");
+  const payload = {};
+  for (const input of inputs) {
+    const raw = input.value.trim();
+    const num = Number(raw);
+    const minimum = Number(input.dataset.minimum);
+    if (raw === "" || !Number.isInteger(num) || num < minimum) {
+      input.classList.add("invalid");
+      settingsShowMsg(`「${input.dataset.label}」需为不小于 ${minimum} 的整数`, true);
+      return;
+    }
+    payload[input.dataset.key] = num;
+  }
+  el.settingsSaveBtn.disabled = true;
+  settingsShowMsg("");
+  try {
+    const { ok, data } = await fetchJson("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (ok) {
+      settingsShowMsg("已保存并生效");
+    } else {
+      settingsShowMsg(data.error || "保存失败", true);
+    }
+  } catch (e) {
+    settingsShowMsg(e.message, true);
+  } finally {
+    el.settingsSaveBtn.disabled = false;
+  }
+});
 
 // ---------- 侧边栏目标列表 ----------
 
@@ -827,33 +1608,76 @@ function renderTargets() {
     el.targetList.appendChild(div);
     return;
   }
-  for (const t of state.targets) {
+  const kw = el.targetSearch.value.trim().toLowerCase();
+  const targets = kw
+    ? state.targets.filter((t) => (t.target + " " + (t.name || "")).toLowerCase().includes(kw))
+    : state.targets;
+  if (!targets.length) {
+    const div = document.createElement("div");
+    div.className = "target-empty";
+    div.textContent = "没有匹配的目标";
+    el.targetList.appendChild(div);
+    return;
+  }
+  for (const t of targets) {
     const item = document.createElement("div");
     item.className = "target-item" + (t.target === state.target ? " active" : "");
 
     const row1 = document.createElement("div");
     row1.className = "row1";
     if (t.has_session) {
-      const dot = document.createElement("span");
-      dot.className = "dot";
-      dot.title = "有进行中的会话";
-      row1.appendChild(dot);
+      const badge = document.createElement("span");
+      badge.className = "sess-badge";
+      badge.textContent = "可追问";
+      row1.appendChild(badge);
     }
     const addr = document.createElement("span");
     addr.className = "addr";
-    addr.textContent = t.target;
+    addr.textContent = t.name || t.target;
     addr.title = t.target;
     row1.appendChild(addr);
 
+    const del = document.createElement("button");
+    del.className = "target-del";
+    del.textContent = "×";
+    del.title = "删除该目标的全部记录";
+    del.addEventListener("click", (e) => { e.stopPropagation(); deleteTarget(t.target); });
+    row1.appendChild(del);
+
     const row2 = document.createElement("div");
     row2.className = "row2";
-    row2.textContent = `${t.email_count} 封邮件 · ${t.sessions} 次会话 · ${fmtTime(t.updated)}`;
+    row2.textContent =
+      (t.name ? `${t.target} · ` : "") +
+      `${t.email_count} 封邮件 · ${t.sessions} 次会话 · ${fmtShort(t.updated)}`;
 
     item.appendChild(row1);
     item.appendChild(row2);
     item.addEventListener("click", () => selectTarget(t.target));
     el.targetList.appendChild(item);
   }
+}
+
+// 删除目标：清后端会话/历史/缓存；若删的是当前选中目标则回到空状态
+async function deleteTarget(target) {
+  if (!await showDialog({
+    title: "删除目标", danger: true, confirmText: "删除",
+    body: `确定删除「${target}」的全部记录吗？历史会话、报告与邮件缓存都会被删除，不可恢复。`,
+  })) return;
+  try {
+    const { ok, data } = await fetchJson("/api/history/" + encodeURIComponent(target), { method: "DELETE" });
+    if (!ok) { toast(data.error || "删除失败", true); return; }
+    toast("已删除 " + target);
+    if (state.target === target) {
+      state.target = null;
+      localStorage.removeItem(targetKey());
+      el.workspace.classList.add("hidden");
+      el.emptyState.classList.remove("hidden");
+      el.app.classList.add("no-target");
+      el.wsTarget.textContent = "邮件分析助手";
+      el.wsChips.innerHTML = "";
+    }
+    loadTargets();
+  } catch (e) { toast(e.message, true); }
 }
 
 // ---------- 目标选中与工作区 ----------
@@ -864,22 +1688,25 @@ async function selectTarget(target, opts) {
   state.reports = null;
   state.currentVersion = null;
   state.emails = null;
-  state.sessions = null;
+  state.mailPage = 0;
   localStorage.setItem(targetKey(), target);
 
   const info = state.targets.find((t) => t.target === target);
   state.hasSession = info ? !!info.has_session : false;
+  state.targetName = info && info.name ? info.name : "";
 
   el.emptyState.classList.add("hidden");
   el.workspace.classList.remove("hidden");
-  el.wsTarget.textContent = target;
+  el.app.classList.remove("no-target");
+  el.wsTarget.textContent = state.targetName ? `${state.targetName}（${target}）` : target;
   el.wsChips.innerHTML = "";
   renderTargets();
   showError("");
+  closeDrawer(); // 移动端选中目标后收起抽屉
 
-  if (!opts.keepTab) switchTab("report");
+  if (!opts.keepTab) switchTab("chat");
 
-  await Promise.all([loadReports(), loadEmails(), loadHistory()]);
+  await Promise.all([loadReports(), loadEmails(), loadConversation(), loadSessions()]);
   renderReport();
   renderChatEntry();
 }
@@ -913,15 +1740,31 @@ function switchTab(name) {
   for (const key of Object.keys(el.panes)) {
     el.panes[key].classList.toggle("hidden", key !== name);
   }
-  if (name === "report") renderReport();
+  if (name === "report") { renderReport(); loadDefaultPrompt(false); } // 预取默认提示词，展开即见
   if (name === "emails") renderMailTable();
   if (name === "chat") renderChatEntry();
-  if (name === "history") renderHistory();
 }
 
 el.tabs.forEach((tab) => {
   tab.addEventListener("click", () => switchTab(tab.dataset.tab));
 });
+
+// ---------- 移动端抽屉 ----------
+
+function openDrawer() {
+  el.sidebar.classList.add("open");
+  el.drawerMask.classList.add("show");
+  document.body.style.overflow = "hidden"; // 打开时禁止背景滚动
+}
+
+function closeDrawer() {
+  el.sidebar.classList.remove("open");
+  el.drawerMask.classList.remove("show");
+  document.body.style.overflow = "";
+}
+
+el.drawerOpenBtn.addEventListener("click", openDrawer);
+el.drawerMask.addEventListener("click", closeDrawer);
 
 // ---------- 分析报告（版本化） ----------
 
@@ -945,11 +1788,14 @@ function renderReport() {
   const reports = state.reports || [];
   el.reportVersion.innerHTML = "";
   el.reportVersion.classList.toggle("hidden", !reports.length);
+  el.reportDelBtn.classList.toggle("hidden", !reports.length);
+  syncReportBtns();
   el.reportContent.innerHTML = "";
   if (!reports.length) {
+    el.reportMetaWrap.classList.add("hidden");
     const div = document.createElement("div");
     div.className = "pane-empty";
-    div.textContent = "尚未分析，点击左上角「开始分析」生成报告。";
+    div.textContent = "暂无报告。到「对话追问」页点击「生成报告」即可生成，也可以先围绕邮件提问补充细节。";
     el.reportContent.appendChild(div);
     return;
   }
@@ -961,49 +1807,243 @@ function renderReport() {
   }
   el.reportVersion.value = String(state.currentVersion);
   const current = reports.find((r) => r.version === state.currentVersion) || reports[reports.length - 1];
+  renderReportMeta(current);
   const div = document.createElement("div");
   renderMarkdown(div, current.content);
   el.reportContent.appendChild(div);
 }
 
+function renderReportMeta(report) {
+  const meta = report.meta;
+  el.reportMetaWrap.classList.remove("hidden");
+  el.reportHistoryDetails.open = false; // 切换版本时履历默认收起
+  el.reportPromptDetails.open = false;
+  el.reportHistoryList.innerHTML = "";
+  if (!meta) {
+    // 旧版本报告没有溯源信息
+    el.reportMetaText.textContent = "素材：—（该版本生成于溯源功能上线前）";
+    el.reportHistoryDetails.classList.add("hidden");
+    el.reportPromptDetails.classList.add("hidden");
+    return;
+  }
+  if (meta.prompt) {
+    el.reportPromptDetails.classList.remove("hidden");
+    el.reportPromptText.textContent = meta.prompt;
+  } else {
+    el.reportPromptDetails.classList.add("hidden");
+  }
+  el.reportMetaText.textContent =
+    `素材：${meta.email_count} 封邮件（${meta.date_range}） · ` +
+    `对话 ${meta.chat_turns} 轮 · 生成于 ${fmtTime(report.time)}`;
+  el.reportHistoryDetails.classList.remove("hidden");
+  const conversation = meta.conversation || [];
+  if (!conversation.length) {
+    const empty = document.createElement("div");
+    empty.className = "report-history-empty";
+    empty.textContent = "该版本生成前没有对话";
+    el.reportHistoryList.appendChild(empty);
+    return;
+  }
+  for (const m of conversation) {
+    appendCollapsibleMsg(el.reportHistoryList, m.role, m.content);
+  }
+}
+
 el.reportVersion.addEventListener("change", () => {
   state.currentVersion = Number(el.reportVersion.value);
-  reportHint("");
   renderReport();
 });
 
-function reportHint(msg, isErr) {
-  el.reportHint.textContent = msg || "";
-  el.reportHint.className = "report-hint" + (msg ? (isErr ? " err" : " ok") : "");
+// 「生成报告」按钮（对话页输入栏）状态与会话联动
+function syncReportBtns() {
+  const label = (state.reports && state.reports.length) ? "生成新报告" : "生成报告";
+  el.newReportBtn.disabled = !state.hasSession;
+  el.newReportBtn.textContent = label;
 }
 
-el.newReportBtn.addEventListener("click", async () => {
+// 「生成报告」= 把报告提示词填入输入框，用户可修改后按发送，回复显示在对话流中，
+// 满意后在回复卡片上点「存为报告」固化为新版本
+async function fillReportPrompt() {
   if (!state.target) return;
-  el.newReportBtn.disabled = true;
-  el.newReportBtn.textContent = "生成中…";
-  reportHint("");
+  await loadDefaultPrompt(false); // 确保默认提示词已就绪（幂等）
+  el.chatInput.value = el.promptTextarea.value.trim();
+  el.chatInput.dispatchEvent(new Event("input")); // 触发输入框自适应高度
+  switchTab("chat");
+  el.chatInput.focus();
+}
+
+el.newReportBtn.addEventListener("click", fillReportPrompt);
+
+// ---------- 报告生成要求编辑区 ----------
+
+let defaultPromptLoaded = false; // 默认要求只拉一次，保留用户编辑内容；切目标不清空
+let defaultPromptText = "";
+
+// 与默认值不一致时在编辑区标题上显示「已自定义」，让用户知道自定义正在生效
+function updatePromptDirty() {
+  const dirty = defaultPromptLoaded &&
+    el.promptTextarea.value.trim() !== defaultPromptText.trim();
+  el.promptDirty.classList.toggle("hidden", !dirty);
+}
+
+async function loadDefaultPrompt(overwrite) {
   try {
-    const { ok, status, data } = await fetchJson("/api/report", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ target: state.target }),
-    });
-    if (ok) {
-      await loadReports();
-      state.currentVersion = data.version;
-      renderReport();
-      reportHint(`已生成 v${data.version}`);
-    } else if (status === 409) {
-      reportHint(data.error || "该邮箱暂无进行中的会话，请先发起分析", true);
-    } else {
-      showError(data.error || "生成报告失败");
+    const { ok, data } = await fetchJson("/api/report-prompt");
+    if (!ok) { showError(data.error || "默认要求加载失败"); return; }
+    defaultPromptText = data.prompt || "";
+    if (overwrite || !defaultPromptLoaded) {
+      el.promptTextarea.value = defaultPromptText;
+      defaultPromptLoaded = true;
     }
+    updatePromptDirty();
   } catch (e) {
     showError(e.message);
-  } finally {
-    el.newReportBtn.disabled = false;
-    el.newReportBtn.textContent = "生成新报告";
   }
+}
+
+el.promptEditor.addEventListener("toggle", () => {
+  if (el.promptEditor.open && !defaultPromptLoaded) loadDefaultPrompt(false);
+});
+
+el.promptTextarea.addEventListener("input", updatePromptDirty);
+
+el.promptResetBtn.addEventListener("click", async () => {
+  await loadDefaultPrompt(true);
+  toast("已恢复默认要求");
+});
+
+// ---------- 个人中心（邮箱设置 / 报告提示词 / 修改密码，底部统一保存） ----------
+
+let profileSystemDefault = ""; // 系统默认提示词，供「恢复系统默认」回填
+
+async function openProfile() {
+  el.profileMask.classList.remove("hidden");
+  el.profileCustomized.classList.add("hidden");
+  try {
+    const { ok, data } = await fetchJson("/api/report-prompt");
+    if (!ok) { showError(data.error || "个人设置加载失败"); return; }
+    profileSystemDefault = data.default || "";
+    el.profilePrompt.value = data.prompt || "";
+    el.profileCustomized.classList.toggle("hidden", !data.customized);
+  } catch (e) {
+    showError(e.message);
+  }
+  loadMailSettings();
+}
+
+// 邮箱设置：个人覆盖项填在输入框，系统默认显示在占位符；密码不回显
+async function loadMailSettings() {
+  try {
+    const { ok, data } = await fetchJson("/api/me/mail-settings");
+    if (!ok) { showError(data.error || "邮箱设置加载失败"); return; }
+    const s = data.settings || {}, g = data.global || {};
+    el.profileMailAddress.value = s.email_address || "";
+    el.profileMailAddress.placeholder =
+      g.email_address ? `系统默认：${g.email_address}` : "系统默认未配置";
+    el.profileMailHost.value = s.imap_host || "";
+    el.profileMailHost.placeholder =
+      g.imap_host ? `系统默认：${g.imap_host}` : "系统默认未配置";
+    el.profileMailPort.value = s.imap_port || "";
+    el.profileMailPort.placeholder = `系统默认：${g.imap_port || 993}`;
+    el.profileMailPassword.value = "";
+    el.profileMailPassword.placeholder = s.has_password
+      ? "已设置，不修改请留空"
+      : (g.has_password ? "留空使用系统默认密码" : "未设置");
+    el.profileMailCustomized.classList.toggle("hidden",
+      !(s.email_address || s.imap_host || s.imap_port || s.has_password));
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+// 测试连接：直接测试当前表单内容，未保存的修改也会生效
+el.profileMailTestBtn.addEventListener("click", async () => {
+  el.profileMailTestBtn.disabled = true;
+  el.profileMailTestBtn.textContent = "测试中…";
+  try {
+    const { ok, data } = await fetchJson("/api/me/mail-settings/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email_address: el.profileMailAddress.value.trim(),
+        imap_host: el.profileMailHost.value.trim(),
+        imap_port: el.profileMailPort.value.trim(),
+        email_password: el.profileMailPassword.value, // 留空则用已保存/系统默认
+      }),
+    });
+    toast(ok ? "连接成功，邮箱设置可用" : (data.error || "连接失败"), !ok);
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    el.profileMailTestBtn.disabled = false;
+    el.profileMailTestBtn.textContent = "测试连接";
+  }
+});
+
+function closeProfile() { el.profileMask.classList.add("hidden"); }
+
+el.profileBtn.addEventListener("click", openProfile);
+el.profileClose.addEventListener("click", closeProfile);
+el.profileMask.addEventListener("click", (e) => {
+  if (e.target === el.profileMask) closeProfile();
+});
+
+// 统一保存：邮箱设置 + 报告默认提示词 + （三个密码框有内容才提交的）修改密码；
+// 任一环节失败则中断并提示，已成功的环节保留
+el.profileSaveBtn.addEventListener("click", async () => {
+  const newPwd = el.profileNewPassword.value;
+  const changingPwd = !!(newPwd || el.profileNewPassword2.value);
+  if (changingPwd && newPwd !== el.profileNewPassword2.value) {
+    toast("两次输入的新密码不一致", true);
+    return;
+  }
+  // 与系统默认一致时按「未自定义」保存，避免默认词日后升级时个人副本过期
+  const prompt = el.profilePrompt.value.trim();
+  const promptToSave = prompt === profileSystemDefault.trim() ? "" : prompt;
+  el.profileSaveBtn.disabled = true;
+  try {
+    const mail = await fetchJson("/api/me/mail-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email_address: el.profileMailAddress.value.trim(),
+        imap_host: el.profileMailHost.value.trim(),
+        imap_port: el.profileMailPort.value.trim(),
+        email_password: el.profileMailPassword.value, // 留空表示不修改
+      }),
+    });
+    if (!mail.ok) { toast(mail.data.error || "邮箱设置保存失败", true); return; }
+    const rp = await fetchJson("/api/report-prompt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: promptToSave }),
+    });
+    if (!rp.ok) { toast(rp.data.error || "提示词保存失败", true); return; }
+    if (changingPwd) {
+      const pw = await fetchJson("/api/me/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_password: newPwd }),
+      });
+      if (!pw.ok) { toast(pw.data.error || "密码修改失败", true); return; }
+      el.profileNewPassword.value = "";
+      el.profileNewPassword2.value = "";
+    }
+    el.profileCustomized.classList.toggle("hidden", !promptToSave);
+    // 报告页的默认提示词缓存失效，下次进入报告页时重新拉取
+    defaultPromptLoaded = false;
+    await loadMailSettings(); // 刷新占位符与「已自定义」徽标
+    toast(changingPwd ? "已保存，密码已修改" : "已保存");
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    el.profileSaveBtn.disabled = false;
+  }
+});
+
+el.profileResetBtn.addEventListener("click", () => {
+  el.profilePrompt.value = profileSystemDefault;
+  toast("已填入系统默认，点击「保存」后生效");
 });
 
 // ---------- 往来邮件 ----------
@@ -1013,6 +2053,8 @@ async function loadEmails() {
   try {
     const { data } = await fetchJson("/api/emails/" + encodeURIComponent(state.target));
     state.emails = data.emails || [];
+    // 重新加载邮件列表后勾选重置为全选
+    state.checked = new Set(state.emails.map((m) => m.idx));
     refreshChips();
     if (state.tab === "emails") renderMailTable();
   } catch (e) {
@@ -1037,20 +2079,49 @@ function renderMailTable() {
   if (state.emails === null) {
     wrap.innerHTML = '<div class="pane-empty">加载中…</div>';
     el.mailCount.textContent = "";
+    updateMailSelection([], null);
     return;
   }
   const list = filteredEmails();
   el.mailCount.textContent = `共 ${state.emails.length} 封，当前显示 ${list.length} 封`;
   if (!list.length) {
     wrap.innerHTML = '<div class="pane-empty">没有匹配的邮件</div>';
+    updateMailSelection([], null);
+    return;
+  }
+  const pageCount = Math.max(1, Math.ceil(list.length / MAIL_PAGE_SIZE));
+  state.mailPage = Math.min(state.mailPage, pageCount - 1);
+  const pageList = list.slice(state.mailPage * MAIL_PAGE_SIZE,
+                              (state.mailPage + 1) * MAIL_PAGE_SIZE);
+  if (window.matchMedia("(max-width: 768px)").matches) {
+    renderMailCards(pageList);
     return;
   }
   const table = document.createElement("table");
   table.className = "mail-table";
-  table.innerHTML = "<thead><tr><th>日期</th><th>方向</th><th>主题</th><th>对方</th><th>预览</th></tr></thead>";
+  table.innerHTML = "<thead><tr><th class=\"cb\"></th><th>日期</th><th>方向</th><th>主题</th><th>对方</th><th>预览</th></tr></thead>";
+  const headerCb = document.createElement("input");
+  headerCb.type = "checkbox";
+  headerCb.title = "全选";
+  table.querySelector("thead th.cb").appendChild(headerCb);
   const tbody = document.createElement("tbody");
-  for (const m of list) {
+  const rowCbs = [];
+  for (const m of pageList) {
     const tr = document.createElement("tr");
+
+    const tdCb = document.createElement("td");
+    tdCb.className = "cb";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = state.checked.has(m.idx);
+    tdCb.appendChild(cb);
+    // 复选框单元格不触发行点击（打开详情弹窗）
+    tdCb.addEventListener("click", (e) => e.stopPropagation());
+    cb.addEventListener("change", () => {
+      if (cb.checked) state.checked.add(m.idx); else state.checked.delete(m.idx);
+      updateMailSelection(rowCbs, headerCb);
+    });
+    rowCbs.push({ idx: m.idx, cb });
 
     const tdDate = document.createElement("td");
     tdDate.className = "mail-date";
@@ -1065,7 +2136,11 @@ function renderMailTable() {
 
     const tdSubject = document.createElement("td");
     tdSubject.className = "mail-subject";
-    tdSubject.textContent = m.subject;
+    if (m.attachments && m.attachments.length) {
+      tdSubject.textContent = "📎 ";
+      tdSubject.title = "附件：" + m.attachments.join("、");
+    }
+    tdSubject.appendChild(document.createTextNode(m.subject));
 
     const tdPeer = document.createElement("td");
     tdPeer.className = "mail-peer";
@@ -1077,16 +2152,221 @@ function renderMailTable() {
     tdPreview.textContent = m.preview;
     tdPreview.title = m.preview;
 
-    tr.append(tdDate, tdDir, tdSubject, tdPeer, tdPreview);
+    tr.append(tdCb, tdDate, tdDir, tdSubject, tdPeer, tdPreview);
     tr.addEventListener("click", () => openEmailModal(m.idx));
     tbody.appendChild(tr);
   }
   table.appendChild(tbody);
   wrap.appendChild(table);
+
+  // 表头全选：作用于当前显示的（筛选后）行
+  headerCb.addEventListener("change", () => {
+    for (const { idx, cb } of rowCbs) {
+      cb.checked = headerCb.checked;
+      if (headerCb.checked) state.checked.add(idx); else state.checked.delete(idx);
+    }
+    updateMailSelection(rowCbs, headerCb);
+  });
+  updateMailSelection(rowCbs, headerCb);
+  renderMailPager(pageCount);
 }
 
-el.mailDirection.addEventListener("change", renderMailTable);
-el.mailKeyword.addEventListener("input", renderMailTable);
+// 移动端：卡片式邮件列表，避免表格横向滚动；勾选逻辑与桌面表格共用 updateMailSelection
+function renderMailCards(list) {
+  const wrap = el.mailTableWrap;
+  const bar = document.createElement("div");
+  bar.className = "mail-mobile-bar";
+  const allCb = document.createElement("input");
+  allCb.type = "checkbox";
+  allCb.title = "全选";
+  const barText = document.createElement("span");
+  barText.textContent = "全选";
+  bar.append(allCb, barText);
+  wrap.appendChild(bar);
+
+  const rowCbs = [];
+  for (const m of list) {
+    const card = document.createElement("div");
+    card.className = "mail-card";
+
+    const cbWrap = document.createElement("span");
+    cbWrap.className = "mc-cb";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = state.checked.has(m.idx);
+    cbWrap.appendChild(cb);
+    cbWrap.addEventListener("click", (e) => e.stopPropagation());
+    cb.addEventListener("change", () => {
+      if (cb.checked) state.checked.add(m.idx); else state.checked.delete(m.idx);
+      updateMailSelection(rowCbs, allCb);
+    });
+    rowCbs.push({ idx: m.idx, cb });
+
+    const isIn = m.direction === "收到";
+    const main = document.createElement("div");
+    main.className = "mc-main";
+    const row1 = document.createElement("div");
+    row1.className = "mc-row1";
+    const badge = document.createElement("span");
+    badge.className = "badge " + (isIn ? "in" : "out");
+    badge.textContent = isIn ? "收到" : "发送";
+    const date = document.createElement("span");
+    date.className = "mc-date";
+    date.textContent = fmtShort(m.date);
+    row1.append(badge, date);
+    const subject = document.createElement("div");
+    subject.className = "mc-subject";
+    if (m.attachments && m.attachments.length) {
+      subject.textContent = "📎 " + m.subject;
+      subject.title = "附件：" + m.attachments.join("、");
+    } else {
+      subject.textContent = m.subject;
+    }
+    const peer = document.createElement("div");
+    peer.className = "mc-peer";
+    peer.textContent = isIn ? m.from_addr : m.to_addrs;
+    const preview = document.createElement("div");
+    preview.className = "mc-preview";
+    preview.textContent = m.preview;
+    main.append(row1, subject, peer, preview);
+
+    card.append(cbWrap, main);
+    card.addEventListener("click", () => openEmailModal(m.idx));
+    wrap.appendChild(card);
+  }
+
+  allCb.addEventListener("change", () => {
+    for (const { idx, cb } of rowCbs) {
+      cb.checked = allCb.checked;
+      if (allCb.checked) state.checked.add(idx); else state.checked.delete(idx);
+    }
+    updateMailSelection(rowCbs, allCb);
+  });
+  updateMailSelection(rowCbs, allCb);
+  // 与桌面路径一致的分页条；页数基于筛选后的完整列表
+  const pageCount = Math.max(1, Math.ceil(filteredEmails().length / MAIL_PAGE_SIZE));
+  renderMailPager(pageCount);
+}
+
+// 分页条：仅多页时显示
+function renderMailPager(pageCount) {
+  if (pageCount <= 1) return;
+  const pager = document.createElement("div");
+  pager.className = "mail-pager";
+  const prev = document.createElement("button");
+  prev.className = "btn-ghost";
+  prev.textContent = "上一页";
+  prev.disabled = state.mailPage === 0;
+  prev.addEventListener("click", () => { state.mailPage--; renderMailTable(); });
+  const info = document.createElement("span");
+  info.textContent = `第 ${state.mailPage + 1} / ${pageCount} 页`;
+  const next = document.createElement("button");
+  next.className = "btn-ghost";
+  next.textContent = "下一页";
+  next.disabled = state.mailPage >= pageCount - 1;
+  next.addEventListener("click", () => { state.mailPage++; renderMailTable(); });
+  pager.append(prev, info, next);
+  el.mailTableWrap.appendChild(pager);
+}
+
+function updateMailSelection(rowCbs, headerCb) {
+  const total = (state.emails || []).length;
+  const count = state.checked.size;
+  // 全选是默认状态，不显示计数；仅缩小范围时提示
+  el.mailSelectedCount.textContent = count < total ? `已选 ${count}/${total} 封` : "";
+  el.sessionBtn.disabled = count === 0;
+  if (headerCb) {
+    const visibleChecked = rowCbs.filter((r) => r.cb.checked).length;
+    headerCb.checked = rowCbs.length > 0 && visibleChecked === rowCbs.length;
+    headerCb.indeterminate = visibleChecked > 0 && visibleChecked < rowCbs.length;
+  }
+}
+
+// 用勾选的邮件子集新建会话并切到对话页（全选时跟随全部邮件；旧会话保留可切换）
+el.sessionBtn.addEventListener("click", async () => {
+  if (!state.target || !state.checked.size) return;
+  el.sessionBtn.disabled = true;
+  try {
+    const total = (state.emails || []).length;
+    const indices = state.checked.size < total
+      ? [...state.checked].sort((a, b) => a - b) : null;
+    await createSession(indices);
+  } finally {
+    el.sessionBtn.disabled = state.checked.size === 0;
+  }
+});
+
+// ---------- 同步新邮件（增量抓取，不动现有会话） ----------
+
+function finishFetch(err, data) {
+  state.fetching = false;
+  state.fetchJobId = null;
+  el.fetchBtn.disabled = false;
+  el.fetchBtn.textContent = "同步新邮件";
+  if (err) { showError(err); return; }
+  toast(data.new ? `新增 ${data.new} 封，共 ${data.count} 封` : `没有新邮件，共 ${data.count} 封`);
+}
+
+function pollFetchJob(jobId) {
+  state.fetchTimer = setInterval(async () => {
+    try {
+      const { ok, data } = await fetchJson("/api/jobs/" + jobId);
+      if (!ok) { clearInterval(state.fetchTimer); state.fetchTimer = null; finishFetch(data.error || "任务查询失败"); return; }
+      if (data.status === "cancelled") {
+        clearInterval(state.fetchTimer); state.fetchTimer = null;
+        state.fetching = false;
+        state.fetchJobId = null;
+        el.fetchBtn.textContent = "同步新邮件";
+        return;
+      }
+      if (data.status === "done") {
+        clearInterval(state.fetchTimer); state.fetchTimer = null;
+        await loadEmails(); // 勾选按现有逻辑重置为全选
+        loadTargets();
+        finishFetch(null, data);
+      } else if (data.status === "error") {
+        clearInterval(state.fetchTimer); state.fetchTimer = null;
+        finishFetch(data.error || "同步新邮件失败");
+      }
+    } catch (e) {
+      clearInterval(state.fetchTimer); state.fetchTimer = null;
+      finishFetch(e.message);
+    }
+  }, 2000);
+}
+
+el.fetchBtn.addEventListener("click", async () => {
+  if (!state.target) return;
+  if (state.fetching) {
+    // 同步进行中再次点击 = 取消
+    const jobId = state.fetchJobId;
+    if (state.fetchTimer) { clearInterval(state.fetchTimer); state.fetchTimer = null; }
+    state.fetchJobId = null;
+    state.fetching = false;
+    el.fetchBtn.textContent = "同步新邮件";
+    toast("已取消同步");
+    if (jobId) { try { await fetchJson("/api/jobs/" + jobId + "/cancel", { method: "POST" }); } catch (e) { /* 忽略 */ } }
+    return;
+  }
+  state.fetching = true;
+  el.fetchBtn.textContent = "取消同步";
+  showError("");
+  try {
+    const { ok, data } = await fetchJson("/api/fetch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: state.target }),
+    });
+    if (!ok) { finishFetch(data.error || "同步新邮件失败"); return; }
+    state.fetchJobId = data.job_id;
+    pollFetchJob(data.job_id);
+  } catch (e) {
+    finishFetch(e.message);
+  }
+});
+
+el.mailDirection.addEventListener("change", () => { state.mailPage = 0; renderMailTable(); });
+el.mailKeyword.addEventListener("input", () => { state.mailPage = 0; renderMailTable(); });
 
 async function openEmailModal(idx) {
   el.modalSubject.textContent = "加载中…";
@@ -1105,7 +2385,20 @@ async function openEmailModal(idx) {
     el.modalSubject.textContent = data.subject;
     el.modalMeta.textContent =
       `${fmtTime(data.date)} · ${data.direction}\n发件人：${data.from_addr}\n收件人：${data.to_addrs}`;
-    el.modalBody.textContent = data.body || "(无正文)";
+    if (data.attachments && data.attachments.length) {
+      el.modalMeta.textContent += `\n附件：${data.attachments.join("、")}（仅文件名，未下载内容）`;
+    }
+    el.modalBody.textContent = "";
+    if (data.html) {
+      // HTML 邮件：用空沙箱 iframe + srcdoc 渲染，禁脚本/同源，防邮件内恶意内容
+      const iframe = document.createElement("iframe");
+      iframe.setAttribute("sandbox", "");
+      iframe.style.cssText = "border:0;width:100%;height:100%;min-height:55vh;background:#fff";
+      el.modalBody.appendChild(iframe);
+      iframe.srcdoc = data.html;
+    } else {
+      el.modalBody.textContent = data.body || "(无正文)";
+    }
   } catch (e) {
     el.modalSubject.textContent = "加载失败";
     el.modalBody.textContent = e.message;
@@ -1116,7 +2409,7 @@ function closeEmailModal() { el.modalMask.classList.add("hidden"); }
 el.modalClose.addEventListener("click", closeEmailModal);
 el.modalMask.addEventListener("click", (e) => { if (e.target === el.modalMask) closeEmailModal(); });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { closeEmailModal(); closeUsersModal(); }
+  if (e.key === "Escape") { closeEmailModal(); closeDrawer(); }
 });
 
 // ---------- 对话追问 ----------
@@ -1125,6 +2418,15 @@ function renderChatEntry() {
   const canChat = state.hasSession;
   el.chatNotice.classList.toggle("hidden", canChat);
   el.chatArea.classList.toggle("hidden", !canChat);
+  // 生成报告依赖进行中的会话，与会话状态联动
+  syncReportBtns();
+  refreshSuggest();
+}
+
+// 首次进入空对话时给出 3 个可点示例问题，降低首次提问门槛
+function refreshSuggest() {
+  const empty = el.chatLog.children.length === 0;
+  el.chatSuggest.classList.toggle("hidden", !(state.hasSession && empty));
 }
 
 function appendMsg(role, text) {
@@ -1137,90 +2439,261 @@ function appendMsg(role, text) {
   }
   el.chatLog.appendChild(div);
   el.chatLog.scrollTop = el.chatLog.scrollHeight;
+  refreshSuggest();
   return div;
+}
+
+// 回填/历史中的超长用户消息（如报告生成指令）默认折叠，点击展开；
+// 上下文压缩产生的【前情摘要】以系统胶囊样式呈现
+function appendCollapsibleMsg(container, role, text) {
+  if (role === "user" && text.startsWith("【前情摘要】")) {
+    const div = document.createElement("div");
+    div.className = "chat-system";
+    div.textContent = text;
+    container.appendChild(div);
+    return div;
+  }
+  if (role !== "user" || text.length <= 300) {
+    const div = document.createElement("div");
+    div.className = "msg " + role;
+    if (role === "assistant") renderMarkdown(div, text); else div.textContent = text;
+    container.appendChild(div);
+    return div;
+  }
+  const div = document.createElement("div");
+  div.className = "msg user";
+  const span = document.createElement("span");
+  span.textContent = text.slice(0, 120) + " …";
+  const btn = document.createElement("button");
+  btn.className = "link-btn";
+  btn.style.color = "#fff";
+  btn.textContent = "展开全文";
+  btn.addEventListener("click", () => {
+    const collapsed = btn.textContent === "收起";
+    span.textContent = collapsed ? text.slice(0, 120) + " …" : text;
+    btn.textContent = collapsed ? "展开全文" : "收起";
+  });
+  div.append(span, document.createTextNode(" "), btn);
+  container.appendChild(div);
+  return div;
+}
+
+// 回复卡片底部「存为报告」：把该条回复固化为一个新报告版本
+function appendSaveReport(bubble, content) {
+  const bar = document.createElement("div");
+  bar.className = "msg-actions";
+  const btn = document.createElement("button");
+  btn.className = "link-btn";
+  btn.textContent = "存为报告";
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      const { ok, data } = await fetchJson("/api/report/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: state.target, content }),
+      });
+      if (!ok) { showError(data.error || "保存报告失败"); btn.disabled = false; return; }
+      btn.textContent = `已存为 v${data.version}`;
+      toast(`已保存为报告 v${data.version}`);
+      await loadReports();
+    } catch (e) {
+      showError(e.message);
+      btn.disabled = false;
+    }
+  });
+  bar.appendChild(btn);
+  bubble.appendChild(bar);
+}
+
+// 发送失败的气泡附带「重试」：点击后原消息重新发送
+function appendRetry(bubble, message) {
+  const btn = document.createElement("button");
+  btn.className = "link-btn";
+  btn.textContent = "重试";
+  btn.addEventListener("click", () => {
+    bubble.remove();
+    el.chatInput.value = message;
+    sendChat();
+  });
+  bubble.appendChild(document.createTextNode(" "));
+  bubble.appendChild(btn);
 }
 
 async function sendChat() {
   const message = el.chatInput.value.trim();
-  if (!message || !state.target) return;
+  if (!message || !state.target || state.chatWaiting) return;
   el.chatInput.value = "";
-  el.chatSend.disabled = true;
+  el.chatInput.style.height = "";
+  state.chatWaiting = true;
+  state.chatAbort = new AbortController();
+  el.chatSend.textContent = "取消"; // 等待回复期间，发送按钮变为取消
   appendMsg("user", message);
   const thinking = appendMsg("assistant", "正在思考…");
+  const renderer = throttledRenderer(thinking);
+  let streamed = false;
   try {
-    const { ok, status, data } = await fetchJson("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ target: state.target, message }),
-    });
-    if (ok) {
-      thinking.innerHTML = "";
-      renderMarkdown(thinking, data.reply);
-    } else if (status === 409) {
+    const full = await streamPost("/api/chat/stream",
+      { target: state.target, message }, state.chatAbort.signal,
+      (text) => { streamed = true; renderer.push(text); });
+    renderer.flush();
+    if (!streamed) thinking.textContent = full || "(空回复)";
+    if (full && full.trim()) appendSaveReport(thinking, full.trim());
+    loadSessions(); // 首轮问答后后端会生成会话标题，刷新切换器
+  } catch (e) {
+    renderer.flush();
+    if (e.name === "AbortError") {
+      thinking.remove();
+      toast("已取消；若回答已生成会保留在历史记录");
+    } else if (e.status === 409) {
       thinking.classList.remove("markdown-body");
-      thinking.textContent = data.error || "该邮箱暂无进行中的会话，请先发起分析。";
+      thinking.textContent = e.message;
       state.hasSession = false;
       renderChatEntry();
     } else {
       thinking.classList.remove("markdown-body");
-      thinking.textContent = "出错：" + (data.error || "请求失败");
+      thinking.textContent = (streamed ? thinking.textContent + "\n\n" : "") + "出错：" + e.message;
+      appendRetry(thinking, message);
     }
-  } catch (e) {
-    thinking.classList.remove("markdown-body");
-    thinking.textContent = "出错：" + e.message;
   } finally {
-    el.chatSend.disabled = false;
+    state.chatWaiting = false;
+    state.chatAbort = null;
+    el.chatSend.textContent = "发送";
     el.chatLog.scrollTop = el.chatLog.scrollHeight;
     el.chatInput.focus();
   }
 }
 
-el.chatSend.addEventListener("click", sendChat);
-el.chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });
+el.chatSend.addEventListener("click", () => {
+  if (state.chatWaiting) { state.chatAbort && state.chatAbort.abort(); } else { sendChat(); }
+});
+el.chatSuggest.querySelectorAll(".chip-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    el.chatInput.value = btn.textContent;
+    sendChat();
+  });
+});
+el.chatInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
+});
+el.chatInput.addEventListener("input", () => {
+  el.chatInput.style.height = "auto";
+  el.chatInput.style.height = Math.min(el.chatInput.scrollHeight, 120) + "px";
+});
 
 // ---------- 历史记录 ----------
 
-async function loadHistory() {
+// 回填活跃会话的问答：切换目标/刷新页面后聊天窗不丢上下文
+async function loadConversation() {
   if (!state.target) return;
+  state.liveMessages = 0;
   try {
-    const { data } = await fetchJson("/api/history/" + encodeURIComponent(state.target));
-    state.sessions = data.sessions || [];
-    if (state.tab === "history") renderHistory();
-  } catch (e) {
-    showError("历史记录加载失败：" + e.message);
-  }
+    const { ok, data } = await fetchJson("/api/conversation/" + encodeURIComponent(state.target));
+    if (!ok) return;
+    state.activeSession = data.session_index;
+    el.chatLog.innerHTML = "";
+    state.liveMessages = data.messages.length;
+    for (const m of data.messages) appendCollapsibleMsg(el.chatLog, m.role, m.content);
+  } catch (e) { /* 回填失败不影响主流程 */ }
 }
 
-function renderHistory() {
-  const wrap = el.historyContent;
-  wrap.innerHTML = "";
-  const sessions = state.sessions || [];
-  if (!sessions.length) {
-    wrap.innerHTML = '<div class="pane-empty">暂无历史记录</div>';
-    return;
-  }
-  sessions.forEach((sess, i) => {
-    const block = document.createElement("div");
-    block.className = "session-block";
-    const title = document.createElement("div");
-    title.className = "session-title";
-    title.textContent = `第 ${i + 1} 次分析 · ${fmtTime(sess.started_at)}`;
-    block.appendChild(title);
-    const msgs = document.createElement("div");
-    msgs.className = "session-msgs";
-    for (const m of sess.messages) {
-      const div = document.createElement("div");
-      div.className = "msg " + m.role;
-      if (m.role === "assistant") {
-        renderMarkdown(div, m.content);
-      } else {
-        div.textContent = m.content;
-      }
-      msgs.appendChild(div);
+// 会话切换器：加载会话列表并选中活跃会话
+async function loadSessions() {
+  if (!state.target) return;
+  try {
+    const { ok, data } = await fetchJson("/api/sessions/" + encodeURIComponent(state.target));
+    if (!ok) return;
+    state.activeSession = data.active;
+    el.sessionSelect.innerHTML = "";
+    for (const s of data.sessions) {
+      const opt = document.createElement("option");
+      opt.value = String(s.index);
+      opt.textContent = `${s.title || "新会话"} · ${s.turns}轮`;
+      el.sessionSelect.appendChild(opt);
     }
-    block.appendChild(msgs);
-    wrap.appendChild(block);
-  });
+    el.sessionSelect.value = String(data.active);
+  } catch (e) { /* 会话列表失败不阻塞主流程 */ }
+}
+
+// 渲染某会话的问答到聊天窗（切换会话/恢复会话共用）
+function renderConversation(messages, sessionIndex) {
+  state.activeSession = sessionIndex;
+  state.hasSession = true;
+  el.chatLog.innerHTML = "";
+  state.liveMessages = messages.length;
+  for (const m of messages) appendCollapsibleMsg(el.chatLog, m.role, m.content);
+  renderChatEntry();
+  el.chatLog.scrollTop = el.chatLog.scrollHeight;
+}
+
+el.sessionSelect.addEventListener("change", async () => {
+  const idx = Number(el.sessionSelect.value);
+  if (!state.target || idx === state.activeSession) return;
+  try {
+    const { ok, data } = await fetchJson("/api/session/active", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: state.target, index: idx }),
+    });
+    if (!ok) {
+      showError(data.error || "切换会话失败");
+      el.sessionSelect.value = String(state.activeSession);
+      return;
+    }
+    renderConversation(data.messages, data.session_index);
+  } catch (e) {
+    showError(e.message);
+  }
+});
+
+// 新建会话：默认基于全部邮件；若在邮件页勾选了子集则询问是否沿用
+el.sessionNewBtn.addEventListener("click", async () => {
+  const total = (state.emails || []).length;
+  const checked = state.checked ? state.checked.size : 0;
+  let indices = null;
+  if (total && checked > 0 && checked < total) {
+    const useSubset = await showDialog({
+      title: "新建会话",
+      body: `当前在「往来邮件」中勾选了 ${checked}/${total} 封邮件。确定 = 新会话只基于勾选的邮件；取消 = 基于全部邮件。`,
+      confirmText: "用勾选的",
+    });
+    if (useSubset) indices = [...state.checked].sort((a, b) => a - b);
+  }
+  await createSession(indices);
+});
+
+// 新建会话：indices 为勾选的邮件序号子集，null 表示全部；旧会话保留在会话列表中
+async function createSession(indices) {
+  if (!state.target) return false;
+  showError("");
+  try {
+    const body = { target: state.target };
+    if (indices) body.indices = indices;
+    const { ok, data } = await fetchJson("/api/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!ok) { showError(data.error || "新建会话失败"); return false; }
+    state.hasSession = true;
+    state.activeSession = data.session_index;
+    el.chatLog.innerHTML = "";
+    const notice = document.createElement("div");
+    notice.className = "chat-system";
+    notice.textContent = indices
+      ? `新会话已创建，基于选中的 ${data.email_count} 封邮件（${data.date_range}）`
+      : `新会话已创建，基于全部 ${data.email_count} 封邮件（${data.date_range}）`;
+    el.chatLog.appendChild(notice);
+    state.liveMessages = 0;
+    await loadSessions();
+    renderChatEntry();
+    switchTab("chat");
+    loadTargets();
+    return true;
+  } catch (e) {
+    showError(e.message);
+    return false;
+  }
 }
 
 // ---------- 分析流程 ----------
@@ -1228,6 +2701,8 @@ function renderHistory() {
 function setAnalyzing(on) {
   state.analyzing = on;
   el.analyzeBtn.disabled = on;
+  el.emptyAnalyzeBtn.disabled = on;
+  el.emptyAnalyzeBtn.textContent = on ? "正在抓取邮件…" : "开始分析";
   el.progress.classList.toggle("hidden", !on);
 }
 
@@ -1237,6 +2712,7 @@ async function startAnalyze(emailOverride) {
   if (state.analyzing) return;
   showError("");
   setAnalyzing(true);
+  state.analyzeStart = Date.now();
   el.progressText.textContent = "正在抓取邮件…";
   try {
     const { ok, data } = await fetchJson("/api/analyze", {
@@ -1258,23 +2734,33 @@ async function startAnalyze(emailOverride) {
 
 function pollJob(jobId, email) {
   if (state.pollTimer) clearInterval(state.pollTimer);
+  state.analyzeJobId = jobId;
   state.pollTimer = setInterval(async () => {
     try {
       const { ok, data } = await fetchJson("/api/jobs/" + jobId);
       if (!ok) { finishWithError(data.error || "任务查询失败"); return; }
-      if (data.status === "running" && data.stage === "llm") {
-        el.progressText.textContent =
-          `已抓取 ${data.count} 封（${data.date_range}），AI 分析中…`;
+      if (data.status === "running") {
+        const stageText = data.stage === "session" ? "正在建立分析会话" : "正在抓取邮件";
+        const secs = Math.floor((Date.now() - state.analyzeStart) / 1000);
+        el.progressText.textContent = `${stageText}… 已耗时 ${secs}s`;
+      }
+      if (data.status === "cancelled") {
+        clearInterval(state.pollTimer); state.pollTimer = null;
+        state.analyzeJobId = null;
+        setAnalyzing(false);
+        toast("已取消");
+        return;
       }
       if (data.status === "done") {
         clearInterval(state.pollTimer); state.pollTimer = null;
+        state.analyzeJobId = null;
         setAnalyzing(false);
         const target = data.target || email;
         await loadTargets();
         await selectTarget(target);
         await loadReports();
         renderReport();
-        switchTab("report");
+        switchTab("chat");
       } else if (data.status === "error") {
         finishWithError(data.error || "分析失败");
       }
@@ -1286,27 +2772,76 @@ function pollJob(jobId, email) {
 
 function finishWithError(msg) {
   if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+  state.analyzeJobId = null;
   setAnalyzing(false);
   showError(msg);
 }
 
 el.analyzeBtn.addEventListener("click", () => startAnalyze());
+el.analyzeCancel.addEventListener("click", async () => {
+  const jobId = state.analyzeJobId;
+  if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+  state.analyzeJobId = null;
+  setAnalyzing(false);
+  toast("已取消，抓取结果将被丢弃");
+  if (jobId) { try { await fetchJson("/api/jobs/" + jobId + "/cancel", { method: "POST" }); } catch (e) { /* 忽略 */ } }
+});
 el.emailInput.addEventListener("keydown", (e) => { if (e.key === "Enter") startAnalyze(); });
+el.emptyAnalyzeBtn.addEventListener("click", () => {
+  el.emailInput.value = el.emptyEmailInput.value;
+  startAnalyze(el.emptyEmailInput.value);
+});
+el.emptyEmailInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    el.emailInput.value = el.emptyEmailInput.value;
+    startAnalyze(el.emptyEmailInput.value);
+  }
+});
+// 会话失效（超时/服务重启）但本地有缓存邮件时，一键恢复活跃会话（含历史问答，不新建会话块）
+el.chatResumeBtn.addEventListener("click", async () => {
+  if (!state.target) return;
+  el.chatResumeBtn.disabled = true;
+  showError("");
+  try {
+    const { ok, data } = await fetchJson("/api/session/active", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: state.target, index: state.activeSession }),
+    });
+    if (!ok) { showError(data.error || "恢复对话失败，可尝试新建会话"); return; }
+    renderConversation(data.messages, data.session_index);
+    loadSessions();
+    loadTargets();
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    el.chatResumeBtn.disabled = false;
+  }
+});
 el.refreshTargets.addEventListener("click", loadTargets);
+el.targetSearch.addEventListener("input", renderTargets);
+// 「更多」下拉：点击切换，点击页面其他位置或菜单项后收起
+el.moreBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  el.moreMenu.classList.toggle("hidden");
+});
+el.moreMenu.addEventListener("click", () => el.moreMenu.classList.add("hidden"));
+document.addEventListener("click", () => el.moreMenu.classList.add("hidden"));
 el.errorClose.addEventListener("click", () => showError(""));
 
 // ---------- 工作区操作 ----------
 
-el.reanalyzeBtn.addEventListener("click", () => {
-  if (state.target) {
-    el.emailInput.value = state.target;
-    startAnalyze(state.target);
-  }
+el.reanalyzeBtn.addEventListener("click", async () => {
+  if (!state.target) return;
+  if (state.hasSession &&
+      !await showDialog({ title: "重新抓取并分析", body: `将重新抓取与 ${state.target} 的往来邮件，并清空当前对话上下文。继续吗？`, confirmText: "继续" })) return;
+  el.emailInput.value = state.target;
+  startAnalyze(state.target);
 });
 
 el.resetBtn.addEventListener("click", async () => {
   if (!state.target) return;
-  if (!confirm(`确定要重置与 ${state.target} 的会话吗？重置后需重新分析才能追问。`)) return;
+  if (!await showDialog({ title: "重置会话", body: `确定要重置与 ${state.target} 的会话吗？重置后需重新分析才能追问。`, danger: true, confirmText: "重置" })) return;
   try {
     const { ok, data } = await fetchJson("/api/reset", {
       method: "POST",
@@ -1316,6 +2851,7 @@ el.resetBtn.addEventListener("click", async () => {
     if (!ok) { showError(data.error || "重置失败"); return; }
     state.hasSession = false;
     el.chatLog.innerHTML = "";
+    state.liveMessages = 0;
     renderChatEntry();
     loadTargets();
   } catch (e) {
@@ -1323,16 +2859,69 @@ el.resetBtn.addEventListener("click", async () => {
   }
 });
 
-el.exportBtn.addEventListener("click", () => {
+el.reportDelBtn.addEventListener("click", async () => {
+  if (!state.target || !state.currentVersion) return;
+  if (!await showDialog({
+    title: "删除报告版本", danger: true, confirmText: "删除",
+    body: `确定删除 v${state.currentVersion} 吗？其他版本不受影响。`,
+  })) return;
+  try {
+    const { ok, data } = await fetchJson(
+      `/api/reports/${encodeURIComponent(state.target)}/${state.currentVersion}`,
+      { method: "DELETE" });
+    if (!ok) { toast(data.error || "删除失败", true); return; }
+    toast(`已删除 v${state.currentVersion}`);
+    state.currentVersion = null; // 让 loadReports 默认选中最高版
+    await loadReports();
+    renderReport();
+  } catch (e) { toast(e.message, true); }
+});
+
+el.exportBtn.addEventListener("click", async () => {
   if (!state.target) return;
-  const a = document.createElement("a");
-  a.href = "/api/export/" + encodeURIComponent(state.target);
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  el.exportBtn.disabled = true;
+  showError("");
+  try {
+    // 用 fetch 先取响应再触发下载：失败时留在应用内提示，且可跟随当前选中版本
+    const url = "/api/export/" + encodeURIComponent(state.target) +
+      (state.currentVersion ? "?version=" + state.currentVersion : "");
+    const resp = await fetch(url);
+    if (resp.status === 401) { showLogin("登录已过期，请重新登录"); return; }
+    if (!resp.ok) {
+      let msg = "导出失败";
+      try { msg = (await resp.json()).error || msg; } catch (e) { /* 保留默认提示 */ }
+      showError(msg);
+      return;
+    }
+    const blob = await resp.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    const cd = resp.headers.get("Content-Disposition") || "";
+    const m = cd.match(/filename\*=UTF-8''([^;]+)/);
+    a.download = m ? decodeURIComponent(m[1]) : "邮件分析.docx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    el.exportBtn.disabled = false;
+  }
 });
 
 // ---------- 启动 ----------
+
+// 深色模式：偏好存 localStorage，<head> 内联脚本负责首屏恢复，这里接管切换与图标
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  try { localStorage.setItem("zemail:theme", theme); } catch (e) { /* 忽略 */ }
+  el.themeToggle.textContent = theme === "dark" ? "☀️" : "🌙";
+}
+el.themeToggle.addEventListener("click", () => {
+  applyTheme(document.documentElement.dataset.theme === "dark" ? "" : "dark");
+});
+applyTheme(document.documentElement.dataset.theme || "");
 
 (async function init() {
   try {

@@ -703,13 +703,17 @@ def create_app(cfg=None):
     @app.get("/api/emails/<path:email>")
     @login_required
     def email_list(email: str):
-        """某目标的往来邮件元数据列表（含正文预览）。"""
+        """某目标的往来邮件元数据列表（含正文预览）。
+
+        带 q 参数时按关键词做 grep 式全文检索（忽略大小写子串匹配，
+        覆盖主题、收发件人、正文全文、附件名），额外返回命中的 idx 列表。
+        """
         match = _match_email(email)
         if not match:
             return jsonify({"error": "请提供有效的邮箱地址"}), 400
         target = match.group(0)
         emails = load_emails(user_cache_dir(current_user()["username"]), target)
-        return jsonify({
+        payload = {
             "target": target,
             "count": len(emails),
             "emails": [{
@@ -722,7 +726,18 @@ def create_app(cfg=None):
                 "preview": m.body.strip()[:200],
                 "attachments": m.attachments,
             } for i, m in enumerate(emails)],
-        })
+        }
+        q = request.args.get("q", "").strip().lower()
+        if q:
+            payload["hits"] = [
+                i for i, m in enumerate(emails)
+                if q in m.subject.lower()
+                or q in m.from_addr.lower()
+                or q in m.to_addrs.lower()
+                or q in m.body.lower()
+                or any(q in a.lower() for a in m.attachments)
+            ]
+        return jsonify(payload)
 
     @app.get("/api/emails/<path:email>/<int:idx>")
     @login_required

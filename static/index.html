@@ -341,6 +341,15 @@
     outline: none; background: #fff;
   }
   .mail-filter input { flex: 1; min-width: 180px; }
+  .mail-filter input[type="date"] { flex: none; min-width: 0; color: var(--text); }
+  .date-field { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); white-space: nowrap; }
+  .mail-filter .btn-ghost { flex: none; white-space: nowrap; }
+  /* 「更多搜索」面板与激活态 */
+  .mail-more-panel { align-items: center; }
+  .mail-more-panel.hidden { display: none; }
+  #mail-more-btn.active { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+  /* 底部弹出框的遮罩与头部仅移动端显示（见媒体查询） */
+  .sheet-mask, .sheet-head { display: none; }
   .mail-filter select:focus, .mail-filter input:focus {
     border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
   }
@@ -609,6 +618,31 @@
     .modal-mask { padding: 8px; }
     .modal { width: 100%; max-height: 94vh; }
     .modal-body { padding: 12px 14px; }
+    /* 更多搜索：从底部弹出 */
+    .sheet-mask {
+      display: block; position: fixed; inset: 0;
+      background: rgba(15,23,42,.45); z-index: 60;
+    }
+    .sheet-mask.hidden { display: none; }
+    .mail-more-panel {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 61;
+      flex-direction: column; align-items: stretch; gap: 12px;
+      background: var(--bg); border-radius: 14px 14px 0 0; margin-bottom: 0;
+      padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+      box-shadow: 0 -8px 30px rgba(0,0,0,.18);
+      animation: sheetUp .18s ease;
+    }
+    .mail-more-panel.hidden { display: none; }
+    .mail-more-panel .sheet-head {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 14px; font-weight: 600; color: var(--text);
+    }
+    .mail-more-panel select, .mail-more-panel input[type="date"] { width: 100%; }
+    .mail-more-panel .date-field { flex-direction: column; align-items: stretch; gap: 4px; }
+    @keyframes sheetUp {
+      from { transform: translateY(30%); opacity: .6; }
+      to { transform: none; opacity: 1; }
+    }
     /* 个人中心表单单列 */
     .profile-form { grid-template-columns: 1fr; }
     /* 报告正文等取消桌面限宽 */
@@ -841,12 +875,23 @@
 
       <section id="tab-emails" class="tab-pane hidden">
         <div class="mail-filter">
+          <input type="text" id="mail-keyword" placeholder="搜索主题、正文、收发件人…">
+          <button id="mail-more-btn" class="btn-ghost" title="更多搜索条件">更多搜索 ▾</button>
+        </div>
+        <div id="mail-more-mask" class="sheet-mask hidden"></div>
+        <div id="mail-more-panel" class="mail-filter mail-more-panel hidden">
+          <div class="sheet-head">
+            <span>更多搜索条件</span>
+            <button id="mail-more-close" class="btn-icon" title="关闭">✕</button>
+          </div>
           <select id="mail-direction">
             <option value="">全部方向</option>
             <option value="收到">收到</option>
             <option value="发出">发送</option>
           </select>
-          <input type="text" id="mail-keyword" placeholder="搜索邮件…">
+          <label class="date-field"><span>开始日期</span><input type="date" id="mail-date-from" title="开始日期（含）"></label>
+          <label class="date-field"><span>结束日期</span><input type="date" id="mail-date-to" title="结束日期（含）"></label>
+          <button id="mail-filter-reset" class="btn-ghost" title="清空方向和日期条件">重置</button>
         </div>
         <div class="mail-count" id="mail-count"></div>
         <div id="mail-table-wrap"></div>
@@ -1048,6 +1093,10 @@ const el = {
   reportPromptDetails: $("report-prompt-details"),
   reportPromptText: $("report-prompt-text"),
   mailDirection: $("mail-direction"), mailKeyword: $("mail-keyword"),
+  mailDateFrom: $("mail-date-from"), mailDateTo: $("mail-date-to"),
+  mailMoreBtn: $("mail-more-btn"), mailMorePanel: $("mail-more-panel"),
+  mailMoreMask: $("mail-more-mask"), mailMoreClose: $("mail-more-close"),
+  mailFilterReset: $("mail-filter-reset"),
   mailCount: $("mail-count"), mailTableWrap: $("mail-table-wrap"),
   sessionBtn: $("session-btn"), mailSelectedCount: $("mail-selected-count"),
   fetchBtn: $("fetch-btn"), moreBtn: $("more-btn"), moreMenu: $("more-menu"),
@@ -1089,6 +1138,8 @@ const state = {
   currentVersion: null, // 当前选中的报告版本号
   emails: null,       // 当前目标的邮件列表缓存
   checked: new Set(), // 往来邮件勾选的邮件 idx 集合
+  searchHits: null,   // 关键词全文搜索命中的 idx 集合（null = 未搜索）
+  searchSeq: 0,       // 搜索请求序号，丢弃过期响应
   liveMessages: 0,
   hasSession: false,
   activeSession: null, // 活跃会话块下标（对应历史 sessions 数组）
@@ -1689,6 +1740,14 @@ async function selectTarget(target, opts) {
   state.currentVersion = null;
   state.emails = null;
   state.mailPage = 0;
+  state.searchHits = null;
+  state.searchSeq++;
+  el.mailKeyword.value = "";
+  el.mailDirection.value = "";
+  el.mailDateFrom.value = "";
+  el.mailDateTo.value = "";
+  refreshMailMoreState();
+  setMailMoreOpen(false);
   localStorage.setItem(targetKey(), target);
 
   const info = state.targets.find((t) => t.target === target);
@@ -2051,20 +2110,57 @@ async function loadEmails() {
     // 重新加载邮件列表后勾选重置为全选
     state.checked = new Set(state.emails.map((m) => m.idx));
     refreshChips();
-    if (state.tab === "emails") renderMailTable();
+    // 列表刷新后重新应用当前关键词搜索
+    if (el.mailKeyword.value.trim()) searchEmails();
+    else { state.searchHits = null; if (state.tab === "emails") renderMailTable(); }
   } catch (e) {
     showError("邮件列表加载失败：" + e.message);
   }
 }
 
+// 关键词全文搜索：服务端对主题/收发件人/正文全文做 grep 式匹配，返回命中 idx
+let mailSearchTimer = null;
+function onMailKeywordInput() {
+  state.mailPage = 0;
+  clearTimeout(mailSearchTimer);
+  mailSearchTimer = setTimeout(searchEmails, 300);
+}
+
+async function searchEmails() {
+  const kw = el.mailKeyword.value.trim();
+  if (!state.target) return;
+  if (!kw) {
+    state.searchSeq++;
+    state.searchHits = null;
+    renderMailTable();
+    return;
+  }
+  const seq = ++state.searchSeq;
+  try {
+    const { data } = await fetchJson(
+      "/api/emails/" + encodeURIComponent(state.target) + "?q=" + encodeURIComponent(kw)
+    );
+    if (seq !== state.searchSeq) return; // 已有更新的搜索，丢弃本次结果
+    state.searchHits = new Set(data.hits || []);
+    renderMailTable();
+  } catch (e) {
+    showError("搜索邮件失败：" + e.message);
+  }
+}
+
 function filteredEmails() {
   const dir = el.mailDirection.value;
-  const kw = el.mailKeyword.value.trim().toLowerCase();
+  const from = el.mailDateFrom.value; // YYYY-MM-DD，含当天
+  const to = el.mailDateTo.value;
   return (state.emails || []).filter((m) => {
     if (dir && m.direction !== dir) return false;
-    if (!kw) return true;
-    return [m.subject, m.from_addr, m.to_addrs, m.preview]
-      .some((s) => String(s || "").toLowerCase().includes(kw));
+    if (state.searchHits && !state.searchHits.has(m.idx)) return false;
+    if (from || to) {
+      const day = String(m.date || "").slice(0, 10);
+      if (from && day < from) return false;
+      if (to && day > to) return false;
+    }
+    return true;
   });
 }
 
@@ -2360,8 +2456,36 @@ el.fetchBtn.addEventListener("click", async () => {
   }
 });
 
-el.mailDirection.addEventListener("change", () => { state.mailPage = 0; renderMailTable(); });
-el.mailKeyword.addEventListener("input", () => { state.mailPage = 0; renderMailTable(); });
+// 「更多搜索」：方向/日期条件收进面板（移动端为底部弹出框），有条件激活时按钮高亮
+function refreshMailMoreState() {
+  const active = !!(el.mailDirection.value || el.mailDateFrom.value || el.mailDateTo.value);
+  el.mailMoreBtn.classList.toggle("active", active);
+}
+
+function setMailMoreOpen(open) {
+  el.mailMorePanel.classList.toggle("hidden", !open);
+  el.mailMoreMask.classList.toggle("hidden", !open);
+}
+
+el.mailMoreBtn.addEventListener("click", () => {
+  setMailMoreOpen(el.mailMorePanel.classList.contains("hidden"));
+});
+el.mailMoreMask.addEventListener("click", () => setMailMoreOpen(false));
+el.mailMoreClose.addEventListener("click", () => setMailMoreOpen(false));
+
+el.mailFilterReset.addEventListener("click", () => {
+  el.mailDirection.value = "";
+  el.mailDateFrom.value = "";
+  el.mailDateTo.value = "";
+  state.mailPage = 0;
+  refreshMailMoreState();
+  renderMailTable();
+});
+
+el.mailDirection.addEventListener("change", () => { state.mailPage = 0; refreshMailMoreState(); renderMailTable(); });
+el.mailDateFrom.addEventListener("change", () => { state.mailPage = 0; refreshMailMoreState(); renderMailTable(); });
+el.mailDateTo.addEventListener("change", () => { state.mailPage = 0; refreshMailMoreState(); renderMailTable(); });
+el.mailKeyword.addEventListener("input", onMailKeywordInput);
 
 async function openEmailModal(idx) {
   el.modalSubject.textContent = "加载中…";

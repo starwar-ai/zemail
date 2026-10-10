@@ -75,7 +75,7 @@ if [ -n "$GIT_REPO" ]; then
     git clone --depth 1 --branch "$GIT_BRANCH" "$GIT_REPO" "$APP_DIR"
   fi
 else
-  # 从当前目录复制（排除无需上传的内容）
+  # 从当前目录同步（.env 与 data/ 运行数据永不覆盖服务器端）
   SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   if [ "$SRC_DIR" != "$APP_DIR" ]; then
     echo "==> 从 $SRC_DIR 同步代码到 $APP_DIR..."
@@ -83,12 +83,13 @@ else
     if command -v rsync >/dev/null 2>&1; then
       rsync -a --delete \
         --exclude '.git' --exclude '__pycache__' --exclude '.venv' \
-        --exclude 'data/emails' --exclude '.env' \
+        --exclude 'data' --exclude '.env' \
         "$SRC_DIR/" "$APP_DIR/"
     else
       mkdir -p "$APP_DIR"
-      cp -r "$SRC_DIR"/. "$APP_DIR/"
-      rm -rf "$APP_DIR/.git" "$APP_DIR/.venv"
+      tar -C "$SRC_DIR" -c \
+        --exclude=./.git --exclude=./.venv --exclude=./data --exclude=./.env \
+        . | tar -C "$APP_DIR" -x
       find "$APP_DIR" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
     fi
   fi

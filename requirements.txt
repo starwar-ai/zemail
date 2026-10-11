@@ -2,3 +2,4 @@ flask>=3.0
 requests>=2.31
 pycryptodome>=3.20
 python-docx>=1.1
+deepseek-harness-sdk>=0.1.5rc1

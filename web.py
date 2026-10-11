@@ -30,7 +30,9 @@ from config import (RUNTIME_SETTINGS, load_config, load_runtime_settings,
 from exporter import build_report_docx
 from mailer import IMAPFetcher
 from mailer.cache import delete_cache, load_emails
+from preprocess import DerivedStore, delete_derived, load_derived
 from summaries import delete_summaries
+from threads import group_threads, normalize_subject, thread_report as gen_thread_report
 
 JOB_TTL_SECONDS = 3600
 
@@ -132,6 +134,8 @@ def create_app(cfg=None):
         app.logger.warning("配置缺失：%s（请检查 .env）", ", ".join(missing))
         print(f"⚠️  配置缺失：{', '.join(missing)}，请检查 .env 后重启", flush=True)
     llm = LLMClient(cfg.llm_api_base, cfg.llm_api_key, cfg.llm_model)
+    card_llm = LLMClient(cfg.llm_api_base, cfg.llm_api_key,
+                         cfg.llm_card_model or cfg.llm_model)
 
     users = UserStore(cfg.users_file)
     if users.is_empty():
@@ -174,7 +178,9 @@ def create_app(cfg=None):
                     llm, context_chars=cfg.llm_context_chars,
                     ttl_seconds=cfg.session_ttl_minutes * 60,
                     history_dir=os.path.join(cfg.session_history_dir, _safe_name(username)),
-                    summary_dir=user_cache_dir(username),
+                    derived_dir=user_cache_dir(username),
+                    card_llm=card_llm,
+                    embedding_model=cfg.llm_embedding_model,
                 )
             return analyzers[username]
 
@@ -219,10 +225,29 @@ def create_app(cfg=None):
             set_job(job_id, status="error",
                     error=f"未在邮箱中找到与 {target} 的往来邮件。{NO_MAIL_HINT}")
             return
-        # 只建立会话（注入邮件摘要），不生成报告；报告由用户在对话后手动生成
         if get_job(job_id).get("cancel"):
             set_job(job_id, status="cancelled")
             return
+        # 离线预处理：逐封生成信息卡，邮件超上下文预算时生成往来画像，配置嵌入
+        # 模型时生成向量。结果按内容哈希缓存；失败或取消不阻断分析（退化为无
+        # 派生数据的原有行为），已生成的部分落盘、下次续跑
+        set_job(job_id, stage="preprocess")
+
+        def _progress(done: int, total: int) -> None:
+            if get_job(job_id).get("cancel"):
+                raise RuntimeError("任务已取消")
+            set_job(job_id, prep_done=done, prep_total=total)
+
+        try:
+            get_analyzer(username).preprocess(target, emails, progress=_progress)
+        except Exception:
+            if get_job(job_id).get("cancel"):
+                set_job(job_id, status="cancelled")
+                return
+        if get_job(job_id).get("cancel"):
+            set_job(job_id, status="cancelled")
+            return
+        # 只建立会话（注入邮件摘要），不生成报告；报告由用户在对话后手动生成
         set_job(job_id, stage="session")
         hdir = os.path.join(cfg.session_history_dir, _safe_name(username))
         history.touch_session(hdir, target)
@@ -554,6 +579,20 @@ def create_app(cfg=None):
             if get_job(job_id).get("cancel"):
                 set_job(job_id, status="cancelled")
                 return
+            # 同步后顺带补齐新邮件的信息卡/画像/向量（增量生成，失败不影响同步结果）
+            set_job(job_id, stage="preprocess")
+
+            def _progress(done: int, total: int) -> None:
+                if get_job(job_id).get("cancel"):
+                    raise RuntimeError("任务已取消")
+                set_job(job_id, prep_done=done, prep_total=total)
+
+            try:
+                get_analyzer(username).preprocess(target, emails, progress=_progress)
+            except Exception:
+                if get_job(job_id).get("cancel"):
+                    set_job(job_id, status="cancelled")
+                    return
             set_job(job_id, status="done", target=target, count=len(emails),
                     new=new_count,
                     date_range=f"{emails[0].date:%Y-%m-%d} ~ {emails[-1].date:%Y-%m-%d}")
@@ -685,6 +724,36 @@ def create_app(cfg=None):
 
         return Response(gen(), mimetype="text/plain; charset=utf-8")
 
+    @app.post("/api/chat/investigate")
+    @login_required
+    def chat_investigate():
+        """深度调研：模型在 harness 循环中调用 grep/检索/读信/线程工具多轮调查后作答。
+
+        流式返回：先输出工具调用轨迹（每行一条），再输出最终结论；模型接口不支持
+        function calling 时自动回退为普通追问。
+        """
+        data = request.get_json(silent=True) or {}
+        message = str(data.get("message", "")).strip()
+        match = _match_email(data.get("target", ""))
+        if not match:
+            return jsonify({"error": "请提供有效的目标邮箱地址"}), 400
+        if not message:
+            return jsonify({"error": "消息不能为空"}), 400
+        username = current_user()["username"]
+        target = match.group(0)
+        user = _session_user(username, target)
+        analyzer = get_analyzer(username)
+        if not ensure_session(username, target):
+            return jsonify({"error": "没有该邮箱的缓存邮件，请先发起分析"}), 409
+
+        def gen():
+            try:
+                yield from analyzer.investigate_stream(user, message)
+            except Exception as exc:
+                yield f"\n\n[出错：{exc}]"
+
+        return Response(gen(), mimetype="text/plain; charset=utf-8")
+
     @app.get("/api/conversation/<path:email>")
     @login_required
     def conversation_detail(email: str):
@@ -761,11 +830,76 @@ def create_app(cfg=None):
             "attachments": m.attachments,
         })
 
+    @app.get("/api/threads/<path:email>")
+    @login_required
+    def thread_list(email):
+        """主题线程列表：按 Message-ID 引用链与规范化主题归并，按最近活动倒序。
+
+        预览优先取预处理信息卡的摘要，无信息卡时退化为正文开头。
+        """
+        match = _match_email(email)
+        if not match:
+            return jsonify({"error": "请提供有效的邮箱地址"}), 400
+        target = match.group(0)
+        username = current_user()["username"]
+        emails = load_emails(user_cache_dir(username), target)
+        cards, _ = load_derived(user_cache_dir(username), target, emails)
+        out = []
+        for tid, indices in enumerate(group_threads(emails)):
+            first, last = emails[indices[0]], emails[indices[-1]]
+            card = cards[indices[-1]] if indices[-1] < len(cards) else None
+            preview = (card or {}).get("summary") or re.sub(
+                r"\s+", " ", last.body.strip())[:80]
+            out.append({
+                "tid": tid,
+                "subject": normalize_subject(first.subject),
+                "count": len(indices),
+                "indices": indices,
+                "first_date": first.date.isoformat(timespec="seconds"),
+                "last_date": last.date.isoformat(timespec="seconds"),
+                "preview": preview,
+            })
+        out.sort(key=lambda t: t["last_date"], reverse=True)
+        return jsonify({"target": target, "threads": out})
+
+    @app.post("/api/thread/report")
+    @login_required
+    def thread_report_api():
+        """生成某主题线程的「来龙去脉」报告（按线程内容哈希缓存，重复请求秒回）。"""
+        data = request.get_json(silent=True) or {}
+        match = _match_email(data.get("target", ""))
+        if not match:
+            return jsonify({"error": "请提供有效的目标邮箱地址"}), 400
+        target = match.group(0)
+        username = current_user()["username"]
+        emails = load_emails(user_cache_dir(username), target)
+        indices = data.get("indices")
+        if not isinstance(indices, list):
+            return jsonify({"error": "缺少线程邮件序号"}), 400
+        indices = sorted({i for i in indices
+                          if isinstance(i, int) and 0 <= i < len(emails)})
+        if not indices:
+            return jsonify({"error": "缺少线程邮件序号"}), 400
+        store = DerivedStore(user_cache_dir(username), target)
+        try:
+            report = gen_thread_report(get_analyzer(username).card_llm,
+                                       store, target, emails, indices)
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+        if not report:
+            return jsonify({"error": "报告生成失败，请稍后重试"}), 500
+        first, last = emails[indices[0]], emails[indices[-1]]
+        return jsonify({
+            "report": report,
+            "subject": normalize_subject(emails[indices[0]].subject),
+            "count": len(indices),
+            "date_range": f"{first.date:%Y-%m-%d} ~ {last.date:%Y-%m-%d}",
+        })
+
     @app.get("/api/history")
     @login_required
     def history_list():
         return jsonify({"targets": history.list_targets(user_history_dir())})
-
     @app.get("/api/history/<path:email>")
     @login_required
     def history_detail(email: str):
@@ -788,6 +922,7 @@ def create_app(cfg=None):
         removed = history.delete_target(user_history_dir(), target)
         delete_cache(user_cache_dir(username), target)
         delete_summaries(user_cache_dir(username), target)
+        delete_derived(user_cache_dir(username), target)
         if not removed:
             return jsonify({"error": "该目标暂无记录"}), 404
         return jsonify({"ok": True})

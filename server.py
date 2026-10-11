@@ -24,10 +24,14 @@ def build_bot(cfg):
         cache_dir=cfg.email_cache_dir,
     )
     llm = LLMClient(cfg.llm_api_base, cfg.llm_api_key, cfg.llm_model)
+    card_llm = LLMClient(cfg.llm_api_base, cfg.llm_api_key,
+                         cfg.llm_card_model or cfg.llm_model)
     analyzer = Analyzer(llm, context_chars=cfg.llm_context_chars,
                         ttl_seconds=cfg.session_ttl_minutes * 60,
                         history_dir=cfg.session_history_dir,
-                        summary_dir=cfg.email_cache_dir)
+                        derived_dir=cfg.email_cache_dir,
+                        card_llm=card_llm,
+                        embedding_model=cfg.llm_embedding_model)
     return BotCore(fetcher, analyzer)
 
 

@@ -29,6 +29,9 @@ def load_emails(cache_dir: str, target: str) -> list:
                 body=item["body"],
                 html=item.get("html", ""),
                 attachments=item.get("attachments") or [],
+                message_id=item.get("message_id", ""),
+                in_reply_to=item.get("in_reply_to", ""),
+                references=item.get("references", ""),
             )
             for item in data
         ]
@@ -51,6 +54,9 @@ def save_emails(cache_dir: str, target: str, emails: list) -> None:
             "body": m.body,
             "html": m.html,
             "attachments": m.attachments,
+            "message_id": m.message_id,
+            "in_reply_to": m.in_reply_to,
+            "references": m.references,
         }
         for m in emails
     ]

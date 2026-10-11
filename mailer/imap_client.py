@@ -221,6 +221,9 @@ class EmailMessage:
     body: str
     html: str = ""  # text/html 原文，供前端渲染；纯文本邮件为空
     attachments: list = field(default_factory=list)
+    message_id: str = ""   # Message-ID 头（主题线程归并用）
+    in_reply_to: str = ""  # In-Reply-To 头
+    references: str = ""   # References 头（空格分隔的 Message-ID 链）
 
     def digest(self, index: int) -> str:
         text = (
@@ -263,6 +266,9 @@ def parse_raw_email(raw: bytes, own_addr: str, target: str, body_chars: int = 20
         body=body,
         html=extract_html(msg),
         attachments=extract_attachment_names(msg),
+        message_id=str(msg.get("Message-ID", "")).strip(),
+        in_reply_to=str(msg.get("In-Reply-To", "")).strip(),
+        references=str(msg.get("References", "")).strip()[-500:],
     )
 
 

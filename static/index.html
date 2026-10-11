@@ -354,6 +354,55 @@
     border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
   }
   .mail-count { font-size: 12px; color: var(--text-3); margin-bottom: 8px; }
+  .mail-view-toggle { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex: none; align-self: flex-start; }
+  .mail-view-toggle button {
+    border: none; background: transparent; padding: 8px 14px; font-size: 13px;
+    color: var(--text-2); cursor: pointer;
+  }
+  .mail-view-toggle button.active { background: var(--primary); color: #fff; }
+  /* 主题列表：卡片式（标题行 + 预览 + 操作），整卡点击进入该主题的邮件列表；
+     卡片装在大屏自动多列的响应式网格里（每列至少 400px，宽度够则 2~3 列） */
+  .thread-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 14px; }
+  .thread-grid .thread-row { margin-bottom: 0; }
+  .thread-row { background: #fff; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 10px; padding: 16px 18px; cursor: pointer; transition: border-color .15s, box-shadow .15s; display: flex; flex-direction: column; min-height: 156px; }
+  .thread-row:hover { border-color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .thread-head { display: flex; align-items: center; gap: 10px; }
+  .thread-title { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .thread-count { flex-shrink: 0; font-size: 12px; color: var(--primary); background: var(--primary-light); border-radius: 999px; padding: 1px 9px; line-height: 18px; white-space: nowrap; }
+  .thread-meta { flex-shrink: 0; font-size: 12.5px; color: var(--text-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  /* 预览固定两行高度（不够两行也占位），保证同排卡片高度一致 */
+  .thread-preview { margin-top: 7px; font-size: 13px; line-height: 1.6; color: var(--text-2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; min-height: 3.2em; }
+  .thread-actions { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 12px; }
+  /* btn-small 默认 flex:1（为侧栏底栏设计），在主题卡片/详情头里恢复自然宽度 */
+  .thread-actions .btn-small, .thread-detail-head .btn-small { flex: none; padding: 6px 16px; }
+  .thread-enter-hint { margin-left: auto; font-size: 12.5px; color: var(--text-3); }
+  .thread-row:hover .thread-enter-hint { color: var(--primary); }
+  /* 主题详情：点击主题后进入该话题的邮件列表（带返回） */
+  .thread-detail-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .thread-detail-title { flex: 1; min-width: 120px; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .thread-detail-meta { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+  /* 来龙去脉报告：时间线 + AI 梳理（弹窗加大，两段分区；.modal.report-modal 提高优先级覆盖 .modal 的 720px） */
+  .modal.report-modal { width: min(1200px, 94vw); max-height: 92vh; }
+  /* 邮件详情弹窗在 PC 上同样加大（iframe HTML 邮件需要更宽的视口） */
+  .modal.email-modal { width: min(1000px, 92vw); max-height: 90vh; }
+  .tr-section-title { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--text-2); letter-spacing: .05em; margin: 18px 0 8px; }
+  .tr-section-title::before { content: ""; width: 3px; height: 12px; border-radius: 2px; background: var(--primary); }
+  .tr-section-title:first-child { margin-top: 0; }
+  .tr-timeline { position: relative; background: var(--bg); border-radius: 8px; padding: 12px 14px 2px; }
+  .tr-timeline::before { content: ""; position: absolute; left: 19px; top: 18px; bottom: 18px; width: 2px; background: var(--border); }
+  .tr-node { position: relative; padding: 0 0 12px 26px; }
+  .tr-node:last-child { padding-bottom: 10px; }
+  .tr-node::before { content: ""; position: absolute; left: 0; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--bg); border: 2px solid var(--primary); }
+  .tr-node.out::before { border-color: var(--green); }
+  .tr-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .tr-date { font-size: 12px; color: var(--text-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .tr-subject { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .tr-line2 { font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tr-line2 .tr-peer { color: var(--text-2); }
+  .tr-report { font-size: 13.5px; }
+  .tr-report.markdown-body { max-width: 100%; font-size: 13.5px; line-height: 1.75; }
+  .tr-report.markdown-body h1, .tr-report.markdown-body h2, .tr-report.markdown-body h3 { font-size: 14px; margin: 12px 0 6px; }
+  .tr-report.markdown-body > :first-child { margin-top: 0; }
   /* 往来邮件页布局：筛选/计数在顶，操作栏钉在底部，表格区内部滚动 */
   #tab-emails { display: flex; flex-direction: column; overflow: hidden; }
   #mail-table-wrap { flex: 1; min-height: 0; overflow: auto; }
@@ -444,7 +493,7 @@
   .link-btn.danger { color: var(--red); }
 
   /* 聊天气泡 */
-  .chat-wrap { max-width: 860px; display: flex; flex-direction: column; height: 100%; }
+  .chat-wrap { width: 100%; max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; height: 100%; }
   .chat-log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; min-height: 200px; }
   .msg { max-width: 82%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.7; }
   .msg.user { align-self: flex-end; background: var(--primary); color: #fff; white-space: pre-wrap; border-bottom-right-radius: 4px; }
@@ -474,6 +523,7 @@
   .chat-notice {
     background: #fffbeb; border: 1px solid #fde68a; color: #92400e;
     border-radius: 10px; padding: 14px 18px; font-size: 13px; max-width: 860px;
+    margin-left: auto; margin-right: auto;
   }
   .chat-notice .btn-primary { width: auto; padding: 6px 14px; font-size: 12.5px; margin-left: 10px; }
   .chat-system {
@@ -493,6 +543,8 @@
     padding: 6px 14px; font-size: 12.5px; color: var(--text-2);
   }
   .chip-btn:hover { border-color: var(--primary); color: var(--primary); }
+  /* 开关型胶囊的开启态（如「深度调研」）：主色填充 */
+  .chip-btn.on { background: var(--primary); border-color: var(--primary); color: #fff; }
   /* 动作型胶囊（如「生成报告」）：主色描边，与普通提问胶囊区分 */
   .chip-action { border-color: var(--primary); color: var(--primary); font-weight: 600; }
   .chip-action:disabled { opacity: .6; cursor: not-allowed; }
@@ -593,6 +645,14 @@
   }
   .mail-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; font-size: 12.5px; color: var(--text-2); }
   .mail-pager .btn-ghost { width: auto; padding: 5px 14px; font-size: 12.5px; }
+
+  /* 响应式：大屏（≥1280px）会话窗口居中并适当加宽 */
+  @media (min-width: 1280px) {
+    .chat-wrap, .chat-notice { max-width: 960px; }
+  }
+  @media (min-width: 1600px) {
+    .chat-wrap, .chat-notice { max-width: 1120px; }
+  }
 
   /* 响应式：平板（769-1024px）侧边栏变窄，其余保持桌面布局 */
   @media (max-width: 1024px) and (min-width: 769px) {
@@ -876,6 +936,10 @@
       <section id="tab-emails" class="tab-pane hidden">
         <div class="mail-filter">
           <input type="text" id="mail-keyword" placeholder="搜索主题、正文、收发件人…">
+          <div class="mail-view-toggle" id="mail-view-toggle">
+            <button data-view="list" class="active" title="按时间列表查看">列表</button>
+            <button data-view="threads" title="按主题线程归并查看，追踪一个话题的来龙去脉">主题</button>
+          </div>
           <button id="mail-more-btn" class="btn-ghost" title="更多搜索条件">更多搜索 ▾</button>
         </div>
         <div id="mail-more-mask" class="sheet-mask hidden"></div>
@@ -925,6 +989,7 @@
           <div class="chat-input-row">
             <textarea id="chat-input" rows="1" placeholder="继续提问，例如：上次报价是多少？（Enter 发送，Shift+Enter 换行）"></textarea>
             <div class="chat-input-bar">
+              <button id="deep-btn" class="chip-btn" title="深度调研：AI 会调用 grep、检索、读信等工具对邮件做多轮调查取证后再作答（耗时更长，结论有据可查）">深度调研</button>
               <button id="new-report-btn" class="chip-btn chip-action">生成报告</button>
               <button id="chat-send">发送</button>
             </div>
@@ -1096,7 +1161,7 @@ const el = {
   mailDateFrom: $("mail-date-from"), mailDateTo: $("mail-date-to"),
   mailMoreBtn: $("mail-more-btn"), mailMorePanel: $("mail-more-panel"),
   mailMoreMask: $("mail-more-mask"), mailMoreClose: $("mail-more-close"),
-  mailFilterReset: $("mail-filter-reset"),
+  mailFilterReset: $("mail-filter-reset"), mailViewToggle: $("mail-view-toggle"),
   mailCount: $("mail-count"), mailTableWrap: $("mail-table-wrap"),
   sessionBtn: $("session-btn"), mailSelectedCount: $("mail-selected-count"),
   fetchBtn: $("fetch-btn"), moreBtn: $("more-btn"), moreMenu: $("more-menu"),
@@ -1105,7 +1170,7 @@ const el = {
   sessionSelect: $("session-select"), sessionNewBtn: $("session-new-btn"),
   emptyEmailInput: $("empty-email-input"), emptyAnalyzeBtn: $("empty-analyze-btn"),
   chatLog: $("chat-log"), chatInput: $("chat-input"), chatSend: $("chat-send"),
-  chatSuggest: $("chat-suggest"),
+  chatSuggest: $("chat-suggest"), deepBtn: $("deep-btn"),
   modalMask: $("email-modal-mask"), modalSubject: $("modal-subject"),
   modalMeta: $("modal-meta"), modalBody: $("modal-body"), modalClose: $("modal-close"),
   addUsername: $("add-username"), addPassword: $("add-password"),
@@ -1149,10 +1214,14 @@ const state = {
   fetchJobId: null,
   fetchTimer: null,
   mailPage: 0,
+  mailView: "list", // 往来邮件视图：list = 时间列表，threads = 主题线程
+  threads: null,    // 主题线程列表缓存（/api/threads），目标或邮件变化后失效
+  openThread: null, // 主题视图中已钻取进入的线程（null = 主题列表页）
   fetching: false,    // 「同步新邮件」任务进行中
   pollTimer: null,
   chatWaiting: false,
   chatAbort: null,
+  deepInvestigate: false, // 「深度调研」开关：开启后提问走 agent harness（多轮工具调查）
   reportPending: false, // 下一次发送由「生成报告」按钮触发，其回复卡片才显示「存为报告」
 };
 
@@ -2107,6 +2176,8 @@ async function loadEmails() {
   try {
     const { data } = await fetchJson("/api/emails/" + encodeURIComponent(state.target));
     state.emails = data.emails || [];
+    state.threads = null; // 邮件变化后主题线程缓存失效
+    state.openThread = null;
     // 重新加载邮件列表后勾选重置为全选
     state.checked = new Set(state.emails.map((m) => m.idx));
     refreshChips();
@@ -2122,6 +2193,7 @@ async function loadEmails() {
 let mailSearchTimer = null;
 function onMailKeywordInput() {
   state.mailPage = 0;
+  state.openThread = null; // 搜索时退出主题详情，回到结果列表
   clearTimeout(mailSearchTimer);
   mailSearchTimer = setTimeout(searchEmails, 300);
 }
@@ -2164,7 +2236,42 @@ function filteredEmails() {
   });
 }
 
+// 邮件行的数据单元格（日期/方向/主题/对方/预览），时间列表与主题详情共用
+function buildMailDataCells(m) {
+  const tdDate = document.createElement("td");
+  tdDate.className = "mail-date";
+  tdDate.textContent = fmtShort(m.date);
+
+  const tdDir = document.createElement("td");
+  const badge = document.createElement("span");
+  const isIn = m.direction === "收到";
+  badge.className = "badge " + (isIn ? "in" : "out");
+  badge.textContent = isIn ? "收到" : "发送";
+  tdDir.appendChild(badge);
+
+  const tdSubject = document.createElement("td");
+  tdSubject.className = "mail-subject";
+  if (m.attachments && m.attachments.length) {
+    tdSubject.textContent = "📎 ";
+    tdSubject.title = "附件：" + m.attachments.join("、");
+  }
+  tdSubject.appendChild(document.createTextNode(m.subject));
+
+  const tdPeer = document.createElement("td");
+  tdPeer.className = "mail-peer";
+  tdPeer.textContent = isIn ? m.from_addr : m.to_addrs;
+  tdPeer.title = tdPeer.textContent;
+
+  const tdPreview = document.createElement("td");
+  tdPreview.className = "mail-preview";
+  tdPreview.textContent = m.preview;
+  tdPreview.title = m.preview;
+
+  return [tdDate, tdDir, tdSubject, tdPeer, tdPreview];
+}
+
 function renderMailTable() {
+  if (state.mailView === "threads") { renderThreads(); return; }
   const wrap = el.mailTableWrap;
   wrap.innerHTML = "";
   if (state.emails === null) {
@@ -2214,36 +2321,7 @@ function renderMailTable() {
     });
     rowCbs.push({ idx: m.idx, cb });
 
-    const tdDate = document.createElement("td");
-    tdDate.className = "mail-date";
-    tdDate.textContent = fmtShort(m.date);
-
-    const tdDir = document.createElement("td");
-    const badge = document.createElement("span");
-    const isIn = m.direction === "收到";
-    badge.className = "badge " + (isIn ? "in" : "out");
-    badge.textContent = isIn ? "收到" : "发送";
-    tdDir.appendChild(badge);
-
-    const tdSubject = document.createElement("td");
-    tdSubject.className = "mail-subject";
-    if (m.attachments && m.attachments.length) {
-      tdSubject.textContent = "📎 ";
-      tdSubject.title = "附件：" + m.attachments.join("、");
-    }
-    tdSubject.appendChild(document.createTextNode(m.subject));
-
-    const tdPeer = document.createElement("td");
-    tdPeer.className = "mail-peer";
-    tdPeer.textContent = isIn ? m.from_addr : m.to_addrs;
-    tdPeer.title = tdPeer.textContent;
-
-    const tdPreview = document.createElement("td");
-    tdPreview.className = "mail-preview";
-    tdPreview.textContent = m.preview;
-    tdPreview.title = m.preview;
-
-    tr.append(tdCb, tdDate, tdDir, tdSubject, tdPeer, tdPreview);
+    tr.append(tdCb, ...buildMailDataCells(m));
     tr.addEventListener("click", () => openEmailModal(m.idx));
     tbody.appendChild(tr);
   }
@@ -2487,7 +2565,278 @@ el.mailDateFrom.addEventListener("change", () => { state.mailPage = 0; refreshMa
 el.mailDateTo.addEventListener("change", () => { state.mailPage = 0; refreshMailMoreState(); renderMailTable(); });
 el.mailKeyword.addEventListener("input", onMailKeywordInput);
 
+// ---------- 主题线程视图 ----------
+
+async function loadThreads() {
+  if (!state.target) return;
+  try {
+    const { ok, data } = await fetchJson("/api/threads/" + encodeURIComponent(state.target));
+    if (!ok) throw new Error(data.error || "加载失败");
+    state.threads = data.threads || [];
+  } catch (e) {
+    state.threads = [];
+    showError("主题线程加载失败：" + e.message);
+  }
+}
+
+// 主题视图：每行一个话题线程卡片（按最近活动倒序）。点击卡片进入主题详情
+// （该话题的完整邮件列表，与时间列表同款表格，可返回）；卡片上的「来龙去脉」
+// 由 AI 梳理该主题起因/时间线/结论，「按主题提问」直接以该线程邮件新建会话
+function renderThreads() {
+  const wrap = el.mailTableWrap;
+  wrap.innerHTML = "";
+  if (state.openThread) { renderThreadDetail(state.openThread); return; }
+  if (!state.threads) {
+    el.mailCount.textContent = "正在归并主题线程…";
+    loadThreads().then(renderThreads);
+    return;
+  }
+  el.mailCount.textContent = `共 ${state.threads.length} 个主题`;
+  if (!state.threads.length) {
+    wrap.innerHTML = '<div class="pane-empty">暂无邮件</div>';
+    return;
+  }
+  const grid = document.createElement("div");
+  grid.className = "thread-grid"; // 大屏自动多列
+  for (const t of state.threads) {
+    const row = document.createElement("div");
+    row.className = "thread-row";
+    row.title = "点击进入该主题的邮件列表";
+
+    const head = document.createElement("div");
+    head.className = "thread-head";
+    const title = document.createElement("span");
+    title.className = "thread-title";
+    title.textContent = t.subject;
+    title.title = t.subject;
+    const count = document.createElement("span");
+    count.className = "thread-count";
+    count.textContent = `${t.count} 封`;
+    const meta = document.createElement("span");
+    meta.className = "thread-meta";
+    meta.textContent = t.first_date === t.last_date
+      ? fmtShort(t.last_date)
+      : `${fmtShort(t.first_date)} ~ ${fmtShort(t.last_date)}`;
+    head.append(title, count, meta);
+
+    const preview = document.createElement("div");
+    preview.className = "thread-preview";
+    preview.textContent = t.preview || "";
+    preview.title = t.preview || "";
+
+    const actions = document.createElement("div");
+    actions.className = "thread-actions";
+    const btnReport = document.createElement("button");
+    btnReport.className = "btn-small";
+    btnReport.textContent = "来龙去脉";
+    btnReport.title = "由 AI 梳理该主题的起因、时间线、结论与关键数字";
+    btnReport.addEventListener("click", (e) => { e.stopPropagation(); openThreadReport(t); });
+    const btnAsk = document.createElement("button");
+    btnAsk.className = "btn-small";
+    btnAsk.textContent = "按主题提问";
+    btnAsk.title = "新建一个只基于该主题邮件的会话";
+    btnAsk.addEventListener("click", (e) => { e.stopPropagation(); createSession(t.indices); });
+    const hint = document.createElement("span");
+    hint.className = "thread-enter-hint";
+    hint.textContent = "查看邮件 ›";
+    actions.append(btnReport, btnAsk, hint);
+
+    row.append(head, preview, actions);
+    row.addEventListener("click", () => { state.openThread = t; renderThreads(); });
+    grid.appendChild(row);
+  }
+  wrap.appendChild(grid);
+}
+
+// 主题详情：该话题的完整邮件列表（列与时间列表一致，点击行打开邮件详情弹窗；
+// 无勾选框与分页——线程规模通常不大，会话需求由「按主题提问」覆盖）
+function renderThreadDetail(t) {
+  const wrap = el.mailTableWrap;
+  wrap.innerHTML = "";
+  const byIdx = new Map((state.emails || []).map((m) => [m.idx, m]));
+  const mails = t.indices.map((i) => byIdx.get(i)).filter(Boolean);
+  el.mailCount.textContent = "";
+
+  const head = document.createElement("div");
+  head.className = "thread-detail-head";
+  const back = document.createElement("button");
+  back.className = "btn-ghost";
+  back.textContent = "← 主题列表";
+  back.title = "返回主题列表";
+  back.addEventListener("click", () => { state.openThread = null; renderThreads(); });
+  const title = document.createElement("span");
+  title.className = "thread-detail-title";
+  title.textContent = t.subject;
+  title.title = t.subject;
+  const meta = document.createElement("span");
+  meta.className = "thread-detail-meta";
+  meta.textContent = t.first_date === t.last_date
+    ? `${mails.length} 封 · ${fmtShort(t.last_date)}`
+    : `${mails.length} 封 · ${fmtShort(t.first_date)} ~ ${fmtShort(t.last_date)}`;
+  const btnReport = document.createElement("button");
+  btnReport.className = "btn-small";
+  btnReport.textContent = "来龙去脉";
+  btnReport.title = "由 AI 梳理该主题的起因、时间线、结论与关键数字";
+  btnReport.addEventListener("click", () => openThreadReport(t));
+  const btnAsk = document.createElement("button");
+  btnAsk.className = "btn-small";
+  btnAsk.textContent = "按主题提问";
+  btnAsk.title = "新建一个只基于该主题邮件的会话";
+  btnAsk.addEventListener("click", () => createSession(t.indices));
+  head.append(back, title, meta, btnReport, btnAsk);
+  wrap.appendChild(head);
+
+  if (!mails.length) {
+    const empty = document.createElement("div");
+    empty.className = "pane-empty";
+    empty.textContent = "该主题暂无邮件";
+    wrap.appendChild(empty);
+    return;
+  }
+  if (window.matchMedia("(max-width: 768px)").matches) {
+    for (const m of mails) {
+      const isIn = m.direction === "收到";
+      const card = document.createElement("div");
+      card.className = "mail-card";
+      const main = document.createElement("div");
+      main.className = "mc-main";
+      const row1 = document.createElement("div");
+      row1.className = "mc-row1";
+      const badge = document.createElement("span");
+      badge.className = "badge " + (isIn ? "in" : "out");
+      badge.textContent = isIn ? "收到" : "发送";
+      const date = document.createElement("span");
+      date.className = "mc-date";
+      date.textContent = fmtShort(m.date);
+      row1.append(badge, date);
+      const subject = document.createElement("div");
+      subject.className = "mc-subject";
+      if (m.attachments && m.attachments.length) {
+        subject.textContent = "📎 " + m.subject;
+        subject.title = "附件：" + m.attachments.join("、");
+      } else {
+        subject.textContent = m.subject;
+      }
+      const peer = document.createElement("div");
+      peer.className = "mc-peer";
+      peer.textContent = isIn ? m.from_addr : m.to_addrs;
+      const preview = document.createElement("div");
+      preview.className = "mc-preview";
+      preview.textContent = m.preview;
+      main.append(row1, subject, peer, preview);
+      card.appendChild(main);
+      card.addEventListener("click", () => openEmailModal(m.idx));
+      wrap.appendChild(card);
+    }
+    return;
+  }
+  const table = document.createElement("table");
+  table.className = "mail-table";
+  table.innerHTML = "<thead><tr><th>日期</th><th>方向</th><th>主题</th><th>对方</th><th>预览</th></tr></thead>";
+  const tbody = document.createElement("tbody");
+  for (const m of mails) {
+    const tr = document.createElement("tr");
+    tr.append(...buildMailDataCells(m));
+    tr.addEventListener("click", () => openEmailModal(m.idx));
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+}
+
+// 来龙去脉报告：上半部分是确定性垂直时间线（立即渲染，不等 AI），
+// 下半部分是 AI 梳理（异步返回后按 markdown 渲染）；弹窗加宽（report-modal）
+async function openThreadReport(t) {
+  el.modalMask.querySelector(".modal").classList.remove("email-modal");
+  el.modalMask.querySelector(".modal").classList.add("report-modal");
+  el.modalSubject.textContent = `来龙去脉：${t.subject}`;
+  el.modalMeta.textContent = t.first_date === t.last_date
+    ? `${t.count} 封 · ${fmtShort(t.last_date)}`
+    : `${t.count} 封 · ${fmtShort(t.first_date)} ~ ${fmtShort(t.last_date)}`;
+  const body = el.modalBody;
+  body.innerHTML = "";
+  body.style.whiteSpace = "normal"; // 覆盖 .modal-body 的 pre-wrap，让 markdown 正常排版
+
+  const tlTitle = document.createElement("div");
+  tlTitle.className = "tr-section-title";
+  tlTitle.textContent = "邮件时间线";
+  const timeline = document.createElement("div");
+  timeline.className = "tr-timeline";
+  const byIdx = new Map((state.emails || []).map((m) => [m.idx, m]));
+  for (const idx of t.indices) { // indices 已按时间升序
+    const m = byIdx.get(idx);
+    if (!m) continue;
+    const isIn = m.direction === "收到";
+    const node = document.createElement("div");
+    node.className = "tr-node" + (isIn ? "" : " out");
+    const top = document.createElement("div");
+    top.className = "tr-top";
+    const date = document.createElement("span");
+    date.className = "tr-date";
+    date.textContent = fmtShort(m.date);
+    const badge = document.createElement("span");
+    badge.className = "badge " + (isIn ? "in" : "out");
+    badge.textContent = isIn ? "收到" : "发送";
+    const subject = document.createElement("span");
+    subject.className = "tr-subject";
+    subject.textContent = m.subject;
+    subject.title = m.subject;
+    top.append(date, badge, subject);
+    // 第二行：对方 + 预览合并为一行，节点更紧凑
+    const line2 = document.createElement("div");
+    line2.className = "tr-line2";
+    const peer = document.createElement("span");
+    peer.className = "tr-peer";
+    peer.textContent = (isIn ? "来自 " : "发给 ") + (isIn ? m.from_addr : m.to_addrs);
+    line2.appendChild(peer);
+    const pv = (m.preview || "").trim();
+    if (pv) line2.appendChild(document.createTextNode(" · " + pv.slice(0, 60)));
+    node.append(top, line2);
+    timeline.appendChild(node);
+  }
+
+  const aiTitle = document.createElement("div");
+  aiTitle.className = "tr-section-title";
+  aiTitle.textContent = "AI 梳理";
+  const reportBox = document.createElement("div");
+  reportBox.className = "tr-report";
+  reportBox.style.whiteSpace = "normal";
+  reportBox.textContent = "正在生成 AI 梳理（首次约需几秒~几十秒，结果有缓存）…";
+
+  body.append(tlTitle, timeline, aiTitle, reportBox);
+  el.modalMask.classList.remove("hidden");
+  try {
+    const { ok, data } = await fetchJson("/api/thread/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: state.target, indices: t.indices }),
+    });
+    if (!ok) {
+      reportBox.textContent = "生成失败：" + (data.error || "请求失败");
+      return;
+    }
+    renderMarkdown(reportBox, data.report);
+  } catch (e) {
+    reportBox.textContent = "生成失败：" + e.message;
+  }
+}
+
+el.mailViewToggle.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-view]");
+  if (!btn || btn.dataset.view === state.mailView) return;
+  state.mailView = btn.dataset.view;
+  state.openThread = null; // 切换视图时退出主题详情
+  for (const b of el.mailViewToggle.querySelectorAll("button")) {
+    b.classList.toggle("active", b === btn);
+  }
+  renderMailTable();
+});
+
 async function openEmailModal(idx) {
+  // 与来龙去脉报告共用弹窗：复位报告专用的加宽类与 whiteSpace 覆盖，切到邮件详情尺寸
+  el.modalMask.querySelector(".modal").classList.remove("report-modal");
+  el.modalMask.querySelector(".modal").classList.add("email-modal");
+  el.modalBody.style.whiteSpace = "";
   el.modalSubject.textContent = "加载中…";
   el.modalMeta.textContent = "";
   el.modalBody.textContent = "";
@@ -2650,11 +2999,13 @@ async function sendChat() {
   state.chatAbort = new AbortController();
   el.chatSend.textContent = "取消"; // 等待回复期间，发送按钮变为取消
   appendMsg("user", message);
-  const thinking = appendMsg("assistant", "正在思考…");
+  const thinking = appendMsg("assistant",
+    state.deepInvestigate ? "正在深度调研（多轮工具调查，耗时较长）…" : "正在思考…");
   const renderer = throttledRenderer(thinking);
   let streamed = false;
   try {
-    const full = await streamPost("/api/chat/stream",
+    const url = state.deepInvestigate ? "/api/chat/investigate" : "/api/chat/stream";
+    const full = await streamPost(url,
       { target: state.target, message }, state.chatAbort.signal,
       (text) => { streamed = true; renderer.push(text); });
     renderer.flush();
@@ -2687,6 +3038,10 @@ async function sendChat() {
 
 el.chatSend.addEventListener("click", () => {
   if (state.chatWaiting) { state.chatAbort && state.chatAbort.abort(); } else { sendChat(); }
+});
+el.deepBtn.addEventListener("click", () => {
+  state.deepInvestigate = !state.deepInvestigate;
+  el.deepBtn.classList.toggle("on", state.deepInvestigate);
 });
 el.chatSuggest.querySelectorAll(".chip-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -2863,7 +3218,10 @@ function pollJob(jobId, email) {
       const { ok, data } = await fetchJson("/api/jobs/" + jobId);
       if (!ok) { finishWithError(data.error || "任务查询失败"); return; }
       if (data.status === "running") {
-        const stageText = data.stage === "session" ? "正在建立分析会话" : "正在抓取邮件";
+        const stageText = data.stage === "session" ? "正在建立分析会话"
+          : data.stage === "preprocess"
+            ? `正在预处理邮件（信息卡 ${data.prep_done || 0}/${data.prep_total || "…"}）`
+            : "正在抓取邮件";
         const secs = Math.floor((Date.now() - state.analyzeStart) / 1000);
         el.progressText.textContent = `${stageText}… 已耗时 ${secs}s`;
       }

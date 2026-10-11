@@ -41,6 +41,8 @@ class Config:
     llm_api_base: str = "https://api.openai.com/v1"
     llm_api_key: str = ""
     llm_model: str = "gpt-4o-mini"
+    llm_card_model: str = ""       # 预处理（信息卡/画像/向量）模型；留空复用 LLM_MODEL
+    llm_embedding_model: str = ""  # 向量检索的嵌入模型；留空不启用向量召回
     llm_context_chars: int = 24000
 
     session_ttl_minutes: int = 120

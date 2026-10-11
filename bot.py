@@ -48,6 +48,10 @@ class BotCore:
                 f"未在邮箱中找到与 {target} 的往来邮件。\n"
                 "可能原因：超过配置的查找时间范围、目标地址拼写有误，或「已发送」文件夹未被纳入（可在 MAIL_FOLDERS 中配置）。"
             ]
+        try:
+            self.analyzer.preprocess(target, emails)
+        except Exception:
+            pass  # 预处理失败不阻断分析（退化为无派生数据的原有行为）
         reply = self.analyzer.start_analysis(user, target, emails)
         header = (
             f"已抓取与 **{target}** 的往来邮件 **{len(emails)}** 封"

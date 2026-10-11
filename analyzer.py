@@ -1,14 +1,22 @@
 """基于 OpenAI 兼容接口的邮件往来会话式分析。"""
+import itertools
 import json
+import os
 import re
 import threading
 import time
 
 import requests
 
+import dsh_agent
+import guard
 import history
+from agent import INVESTIGATE_SYSTEM, EmailToolbox, run_agent
+from preprocess import (DerivedStore, ensure_cards, ensure_profile,
+                        ensure_vectors, load_derived, load_vectors)
 from retrieval import EmailIndex, catalog_line
 from summaries import SummaryStore, build_summary_block
+from threads import thread_ids
 
 SYSTEM_PROMPT = """你是一名专业的邮件往来分析助手。用户会提供其邮箱与某个指定联系人之间的历史往来邮件。你的任务：
 1. 梳理双方的关系背景、沟通主线与关键事件时间线；
@@ -75,30 +83,64 @@ class LLMClient:
             if delta:
                 yield delta
 
+    def embed(self, texts: list, model: str = None) -> list:
+        """调用 /embeddings，返回与 texts 顺序对齐的向量列表。非 200 时抛异常。"""
+        resp = self._session.post(
+            f"{self.api_base}/embeddings",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={"model": model or self.model, "input": texts},
+            timeout=self.timeout,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"LLM 嵌入接口返回 {resp.status_code}: {resp.text[:200]}")
+        data = resp.json()["data"]
+        return [d["embedding"] for d in sorted(data, key=lambda d: d["index"])]
 
-def build_context(emails: list, max_chars: int, hidden_note: str = None) -> tuple:
+    def chat_tools(self, messages: list, tools: list) -> dict:
+        """function calling（DeepSeek 等 OpenAI 兼容接口）：返回原始 assistant
+        message（含 content 与 tool_calls），调用方负责原样回填到 messages。"""
+        resp = self._session.post(
+            f"{self.api_base}/chat/completions",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={"model": self.model, "messages": messages,
+                  "tools": tools, "temperature": 0.3},
+            timeout=self.timeout,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"LLM 接口返回 {resp.status_code}: {resp.text[:200]}")
+        return resp.json()["choices"][0]["message"]
+
+
+def build_context(emails: list, max_chars: int, hidden_note: str = None,
+                  cards: list = None, profile: str = "") -> tuple:
     """整理注入模型的邮件材料，返回 (文本, 附全文的邮件下标集合, 目录未覆盖的早期邮件数)。
 
     全部放得下时保持全文升序注入；放不下时改为「全量目录 + 最近若干封全文」：
-    目录占约 40% 预算，剩余预算放最近邮件全文。目录排不下的早期邮件默认折叠为
-    一行说明，提供 hidden_note（如按月摘要块）时替换该说明。未附全文的邮件不丢失
-    ——追问时会按问题检索补充（见 Analyzer._augment），模型也可按 REQUEST_EMAIL
-    协议主动调阅。
+    目录占约 40% 预算，剩余预算放最近邮件全文。有预处理派生数据时，目录行采用
+    信息卡摘要，并在目录前注入「往来画像」（占目录预算）。目录排不下的早期邮件
+    默认折叠为一行说明，提供 hidden_note（如按月摘要块）时替换该说明。未附全文
+    的邮件不丢失——追问时会按问题检索补充（见 Analyzer._augment），模型也可按
+    REQUEST_EMAIL 协议主动调阅。
     """
     blocks = [e.digest(i) for i, e in enumerate(emails, 1)]
     if sum(len(b) for b in blocks) <= max_chars:
         return "\n\n".join(blocks), frozenset(range(len(emails))), 0
-    catalog_budget = int(max_chars * 0.4)
+    head = ""
+    if profile:
+        head = f"【往来画像】（由全部 {len(emails)} 封邮件的预处理信息卡生成）\n{profile}\n\n"
+    catalog_budget = max(200, int(max_chars * 0.4) - len(head))
     lines, used, hidden = [], 0, 0
     for i in range(len(emails) - 1, -1, -1):
-        line = catalog_line(emails[i], i + 1)
+        line = catalog_line(emails[i], i + 1,
+                            card=cards[i] if cards and i < len(cards) else None)
         if used + len(line) > catalog_budget:
             hidden = i + 1
             break
         lines.append(line)
         used += len(line)
     lines.reverse()
-    catalog = "【全部邮件目录（一行一封）】\n"
+    catalog = ("【全部邮件目录（一行一封，含预处理信息卡摘要）】\n"
+               if cards and any(cards) else "【全部邮件目录（一行一封）】\n")
     if hidden and hidden_note:
         catalog += hidden_note + "\n"
     elif hidden:
@@ -106,7 +148,7 @@ def build_context(emails: list, max_chars: int, hidden_note: str = None) -> tupl
                     f"{emails[0].date:%Y-%m-%d} ~ {emails[hidden - 1].date:%Y-%m-%d}，"
                     "可经检索调阅）\n")
     catalog += "\n".join(lines)
-    body_budget = max_chars - len(catalog)
+    body_budget = max_chars - len(head) - len(catalog)
     full_blocks, used, start = [], 0, len(emails)
     for i in range(len(emails) - 1, -1, -1):
         if full_blocks and used + len(blocks[i]) > body_budget:
@@ -115,7 +157,7 @@ def build_context(emails: list, max_chars: int, hidden_note: str = None) -> tupl
         used += len(blocks[i])
         start = i
     full_blocks.reverse()
-    text = (catalog + "\n\n【最近邮件全文】\n" + "\n\n".join(full_blocks)
+    text = (head + catalog + "\n\n【最近邮件全文】\n" + "\n\n".join(full_blocks)
             + "\n\n（更早的邮件未附全文；围绕任何邮件提问时，系统会自动检索相关邮件全文补充进来）")
     return text, frozenset(range(start, len(emails))), hidden
 
@@ -187,20 +229,27 @@ class _Session:
         self.emails = []        # 会话邮件（供追问时检索）
         self.index = None       # EmailIndex；全部邮件已附全文时为 None（无需检索）
         self.full_indices = frozenset()  # 已随初始注入附全文的邮件下标
+        self.cards = []         # 预处理信息卡（与 emails 对齐）
+        self.vectors = None     # 预处理向量（与 emails 对齐；未启用为 None）
+        self.threads = []       # 主题线程编号（与 emails 对齐，检索命中时做线程扩展）
 
 
 class Analyzer:
     """维护每个用户的分析会话：首次注入邮件摘要，之后多轮追问。"""
 
     def __init__(self, llm: LLMClient, context_chars: int = 24000, ttl_seconds: int = 7200,
-                 history_dir: str = "", summary_dir: str = ""):
+                 history_dir: str = "", derived_dir: str = "", card_llm: LLMClient = None,
+                 embedding_model: str = ""):
         self.llm = llm
+        self.card_llm = card_llm or llm  # 预处理（信息卡/画像/向量）用的模型，默认同主模型
+        self.embedding_model = embedding_model  # 向量检索的嵌入模型；空 = 不启用向量召回
         self.context_chars = context_chars
         self.ttl = ttl_seconds
         self.history_dir = history_dir
-        self.summary_dir = summary_dir  # 早期邮件按月摘要的缓存目录；留空禁用分层摘要
+        self.derived_dir = derived_dir  # 派生数据（按月摘要/信息卡/画像/向量）缓存目录；留空禁用
         self._sessions = {}
         self._lock = threading.Lock()
+        self._dsh_broken = False  # DSH 调研运行失败后置真，进程内不再尝试
 
     def _get(self, user: str):
         with self._lock:
@@ -217,6 +266,29 @@ class Analyzer:
         with self._lock:
             self._sessions.pop(user, None)
 
+    def preprocess(self, target: str, emails: list, progress=None) -> dict:
+        """抓取/同步后离线预计算派生数据：逐封信息卡、往来画像（邮件总量超上下文
+        预算时）、向量嵌入（配置嵌入模型时）。结果按内容哈希缓存，重复调用增量补齐。
+
+        progress(done, total) 回调抛异常会中断处理（用于任务取消），已完成部分
+        已落盘，下次续跑。派生数据是分析的加速器：调用方应把本方法的异常视为
+        可回退（退化为无派生数据的原有行为），而非阻断分析流程。
+        """
+        if not self.derived_dir or not emails:
+            return {}
+        store = DerivedStore(self.derived_dir, target)
+        cards = ensure_cards(self.card_llm, store, target, emails, progress=progress)
+        result = {"cards": sum(1 for c in cards if c)}
+        oversized = sum(len(e.digest(i)) for i, e in enumerate(emails, 1)) > self.context_chars
+        if oversized:
+            result["profile"] = bool(
+                ensure_profile(self.card_llm, store, target, emails, cards))
+        if self.embedding_model:
+            vectors = ensure_vectors(self.card_llm, self.embedding_model,
+                                     self.derived_dir, target, emails, cards)
+            result["vectors"] = sum(1 for v in vectors if v)
+        return result
+
     @staticmethod
     def _coverage(emails: list, full_indices: frozenset) -> str:
         """注入材料中全文覆盖情况的说明文字。"""
@@ -225,32 +297,48 @@ class Analyzer:
         return (f"（共 {len(emails)} 封，全部列于目录，其中 {len(full_indices)} 封附全文，"
                 "其余可在追问时按需检索调阅）")
 
-    def _bind_emails(self, sess, emails: list, full_indices: frozenset) -> None:
-        """把会话邮件挂上会话，并在未全部附全文时建检索索引（供追问按需调阅）。"""
+    def _bind_emails(self, sess, emails: list, full_indices: frozenset,
+                     cards: list = None, vectors: list = None) -> None:
+        """把会话邮件挂上会话，并在未全部附全文时建检索索引（供追问时按需调阅）。"""
         sess.emails = list(emails)
         sess.full_indices = full_indices
+        sess.cards = cards or []
+        sess.vectors = vectors
+        sess.threads = thread_ids(emails)
         if len(full_indices) < len(emails):
-            sess.index = EmailIndex(emails)
+            sess.index = EmailIndex(emails, cards=sess.cards, vectors=vectors,
+                                    threads=sess.threads)
 
     def _materials(self, target: str, emails: list) -> tuple:
-        """生成注入材料。目录也放不下的早期邮件达到 10 封且有摘要存储时，
-        改用按月摘要替代一行折叠说明；摘要块比一行说明长，会再多挤出几封
-        隐藏邮件，迭代重排到收敛（最多 3 轮，摘要按月缓存，迭代几乎零成本）。"""
-        digest, full, hidden = build_context(emails, self.context_chars)
-        if not self.summary_dir or hidden < 10:
-            return digest, full
-        store = SummaryStore(self.summary_dir)
+        """生成注入材料，返回 (文本, 附全文下标集合, 信息卡, 画像, 向量)。
+
+        派生数据（信息卡/画像/向量）由 preprocess() 在抓取后离线生成，这里只读
+        加载。目录也放不下的早期邮件达到 10 封且有摘要存储时，改用按月摘要替代
+        一行折叠说明；摘要块比一行说明长，会再多挤出几封隐藏邮件，迭代重排到
+        收敛（最多 3 轮，摘要按月缓存，迭代几乎零成本）。
+        """
+        cards, profile, vectors = [], "", None
+        if self.derived_dir:
+            cards, profile = load_derived(self.derived_dir, target, emails)
+            if self.embedding_model:
+                vectors = load_vectors(self.derived_dir, target, emails)
+        digest, full, hidden = build_context(emails, self.context_chars,
+                                             cards=cards, profile=profile)
+        if not self.derived_dir or hidden < 10:
+            return digest, full, cards, profile, vectors
+        store = SummaryStore(self.derived_dir)
         budget = int(self.context_chars * 0.25)
         for _ in range(3):
             note = build_summary_block(self.llm, store, target, emails[:hidden], budget)
             if not note:
                 break
-            digest, full, new_hidden = build_context(emails, self.context_chars,
-                                                     hidden_note=note)
+            digest, full, new_hidden = build_context(
+                emails, self.context_chars, hidden_note=note,
+                cards=cards, profile=profile)
             if new_hidden <= hidden:
                 break
             hidden = new_hidden
-        return digest, full
+        return digest, full, cards, profile, vectors
 
     def _inject_prompt(self, target: str, emails: list, digest: str,
                        full_indices: frozenset, instruction: str) -> str:
@@ -264,7 +352,7 @@ class Analyzer:
     def prepare_session(self, user: str, target: str, emails: list,
                         history_index: int = None) -> None:
         """只注入邮件材料建立会话，不调用模型、不生成报告。"""
-        digest, full_indices = self._materials(target, emails)
+        digest, full_indices, cards, _, vectors = self._materials(target, emails)
         prompt = self._inject_prompt(target, emails, digest, full_indices,
                                      _PREPARE_INSTRUCTION)
         messages = [
@@ -275,7 +363,7 @@ class Analyzer:
         sess.email_count = len(emails)
         if emails:
             sess.date_range = f"{emails[0].date:%Y-%m-%d %H:%M} ~ {emails[-1].date:%Y-%m-%d %H:%M}"
-        self._bind_emails(sess, emails, full_indices)
+        self._bind_emails(sess, emails, full_indices, cards, vectors)
         with self._lock:
             self._sessions[user] = sess
 
@@ -334,7 +422,7 @@ class Analyzer:
         return {"email_count": sess.email_count, "date_range": sess.date_range}
 
     def start_analysis(self, user: str, target: str, emails: list) -> str:
-        digest, full_indices = self._materials(target, emails)
+        digest, full_indices, cards, _, vectors = self._materials(target, emails)
         prompt = self._inject_prompt(target, emails, digest, full_indices,
                                      _INITIAL_INSTRUCTION)
         messages = [
@@ -347,7 +435,7 @@ class Analyzer:
         sess.email_count = len(emails)
         if emails:
             sess.date_range = f"{emails[0].date:%Y-%m-%d %H:%M} ~ {emails[-1].date:%Y-%m-%d %H:%M}"
-        self._bind_emails(sess, emails, full_indices)
+        self._bind_emails(sess, emails, full_indices, cards, vectors)
         with self._lock:
             self._sessions[user] = sess
         self._record(history.start_session, target, _INITIAL_INSTRUCTION, reply)
@@ -377,12 +465,20 @@ class Analyzer:
         """追问时按问题检索尚未附全文的邮件，把最相关的全文拼进当轮问题。
 
         全部邮件已附全文（无检索索引）或零命中时原样返回。检索预算取上下文
-        总量的一半，限制在 2000~12000 字符之间。
+        总量的一半，限制在 2000~12000 字符之间。配置嵌入模型且会话有向量时，
+        对问题取向量做 BM25+余弦混合排序，语义相关但无关键词重叠的邮件也能命中。
         """
         if sess.index is None:
             return text
         budget = min(12000, max(2000, self.context_chars // 2))
-        hits = sess.index.search(text, max_chars=budget, exclude=sess.full_indices)
+        query_vector = None
+        if self.embedding_model and sess.vectors:
+            try:
+                query_vector = self.llm.embed([text], model=self.embedding_model)[0]
+            except Exception:
+                query_vector = None
+        hits = sess.index.search(text, max_chars=budget, exclude=sess.full_indices,
+                                 query_vector=query_vector)
         if not hits:
             return text
         blocks = "\n\n".join(sess.emails[i].digest(i + 1) for i in hits)
@@ -419,6 +515,108 @@ class Analyzer:
         if notes:
             parts.append("说明：" + "；".join(notes))
         return _FETCH_HEAD + "\n\n".join(parts) + "\n\n请基于以上材料继续作答。"
+
+    @staticmethod
+    def _ensure_index(sess) -> EmailIndex:
+        """会话已全量附正文时 index 为 None；调研工具需要检索能力，按需补建。"""
+        if sess.index is None:
+            sess.index = EmailIndex(sess.emails, cards=sess.cards,
+                                    vectors=sess.vectors, threads=sess.threads)
+        return sess.index
+
+    def investigate_stream(self, user: str, text: str):
+        """深度调研：优先由 DSH（DeepSeek Harness）agent 在物化出的邮件工作区里
+        用 grep/read 等工具反复调查取证；DSH 未安装或运行失败时回退内置 harness
+        （agent.py 工具循环），模型接口不支持 function calling 时回退普通追问。
+        进度轨迹与最终结论都作为文本流产出；结论经护栏层校验（引用越界/原文
+        片段核对/覆盖率统计）并写审计日志，会话与历史记录问题与带护栏块的结论。"""
+        sess = self._get(user)
+        if sess is None:
+            raise RuntimeError("没有进行中的分析会话，请先发送邮箱地址开始分析")
+        if not self._dsh_broken and dsh_agent.available():
+            try:
+                yield from self._investigate_dsh(sess, user, text)
+                return
+            except Exception as exc:
+                self._dsh_broken = True
+                yield f"（DSH 调研失败：{exc}，已回退内置调研）\n"
+        toolbox = EmailToolbox(sess.emails, cards=sess.cards, threads=sess.threads,
+                               index=self._ensure_index(sess))
+        digest, _, _, _, _ = self._materials(sess.target, sess.emails)
+        materials = (f"以下是我的邮箱与 {sess.target} 的往来邮件材料概览"
+                     f"（邮件编号供工具调用引用）：\n\n{digest}")
+        events = run_agent(self.llm, INVESTIGATE_SYSTEM, materials, text, toolbox)
+        try:
+            first = next(events)
+        except RuntimeError:
+            yield "（当前模型接口不支持工具调用，已回退为普通追问）\n\n"
+            yield from self.chat_stream(user, text)
+            return
+        final = ""
+        for kind, payload in itertools.chain([first], events):
+            if kind == "progress":
+                yield payload + "\n"
+            else:
+                final = payload
+        if not final:
+            raise RuntimeError("调研未产生结论")
+        yield "\n\n" + self._finish_investigation(sess, user, text, final, "builtin")
+
+    def _investigate_dsh(self, sess, user: str, text: str):
+        """DSH 路径：把会话邮件物化为工作区，驱动 DSH agent 调查取证。"""
+        cards, profile = sess.cards, ""
+        if self.derived_dir:
+            cards, profile = load_derived(self.derived_dir, sess.target, sess.emails)
+        root = dsh_agent.workspace_root(self.derived_dir)
+        yield "· 正在整理邮件工作区\n"
+        workdir = dsh_agent.materialize_workspace(
+            root, sess.target, sess.emails, cards=cards,
+            threads=sess.threads, profile=profile)
+        yield "· 已启动 DSH 调查\n"
+        final = ""
+        for kind, payload in dsh_agent.stream_investigation(
+                self.llm.api_base, self.llm.api_key, self.llm.model,
+                workdir, os.path.join(root, "home"), sess.target, text):
+            if kind == "progress":
+                yield payload + "\n"
+            else:
+                final = payload
+        if not final:
+            raise RuntimeError("调研未产生结论")
+        yield "\n\n" + self._finish_investigation(sess, user, text, final, "dsh")
+
+    def _finish_investigation(self, sess, user: str, text: str, final: str,
+                              engine: str) -> str:
+        """调研收尾：护栏校验（引用/原文/覆盖率附加块）、审计日志、会话与历史落库。
+
+        护栏只做确定性核对，失败不阻断结论返回。落库与展示用带护栏块的完整文本，
+        让无效引用的标记在会话记录与历史中同样可见。
+        """
+        try:
+            annotated = final + ("\n\n" + guard.guardrail_sections(final, sess.emails)
+                                 if sess.emails else "")
+        except Exception:
+            annotated = final
+        with self._lock:
+            sess.messages.append({"role": "user", "content": text})
+            sess.messages.append({"role": "assistant", "content": annotated})
+            sess.updated = time.time()
+        self._record(history.append_exchange, sess.target, text, annotated,
+                     sess.history_index)
+        self._record_title(sess, text, final)
+        citations = guard.extract_citations(final)
+        guard.audit(self.history_dir, {
+            "event": "investigate", "user": user, "target": sess.target,
+            "engine": engine, "question": text[:500],
+            "emails_total": len(sess.emails),
+            "cited": [n for n in citations if 1 <= n <= len(sess.emails)],
+            "invalid_citations": [n for n in citations
+                                  if not 1 <= n <= len(sess.emails)],
+            "quotes_failed": sum(1 for _, hit in guard.verify_quotes(final, sess.emails)
+                                 if hit is None),
+            "conclusion_chars": len(final),
+        })
+        return annotated
 
     def chat(self, user: str, text: str) -> str:
         sess = self._get(user)

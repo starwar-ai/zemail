@@ -16,6 +16,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 DERIVED_SUFFIX = ".derived.json"
 VECTORS_SUFFIX = ".vectors.json"
 
+# 信息卡结构版本：todos 从字符串列表升级为 {text, owner, due} 对象列表。
+# 缓存中旧版本卡片视为失效，下次预处理时重新抽取（不重算哈希，只重跑解析）。
+CARD_VERSION = 2
+
 
 def _safe_path(dir_path: str, target: str, suffix: str) -> str:
     safe = re.sub(r"[^\w.@-]", "_", target)
@@ -70,11 +74,43 @@ _CARD_INSTRUCTION = """从下面这封邮件中提取关键信息，输出严格
 - "summary"：一句话概括邮件核心内容（不超过 60 字）
 - "intent"：邮件意图，从 询价/报价/订单/合同/交付/催办/会议/通知/咨询/投诉/致谢/闲聊/其他 中选一个
 - "entities"：关键实体列表（金额、日期、数量、合同号、产品名、人名等，最多 8 个）
-- "todos"：承诺、待办或行动项列表（没有则为空数组，最多 5 条）
+- "todos"：承诺、待办或行动项列表（没有则为空数组，最多 5 条）。每条为对象：
+  - "text"：事项内容（不超过 60 字）
+  - "owner"：责任方，"me" 表示应由我方（邮箱主人）完成，"them" 表示应由对方完成
+  - "due"：截止或承诺日期，格式 YYYY-MM-DD；邮件中未明确日期则为 null
 - "sentiment"：语气，从 积极/中性/消极/强硬 中选一个
 只输出 JSON 本身，不要任何解释或 markdown 代码围栏。"""
 
 _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.S)
+_DUE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _parse_todo(item):
+    """归一化单条待办：兼容字符串（旧格式）与对象（v2），非法返回 None。"""
+    if isinstance(item, str):
+        text = item.strip()
+        return {"text": text[:60], "owner": "", "due": None} if text else None
+    if not isinstance(item, dict):
+        return None
+    text = str(item.get("text") or "").strip()
+    if not text:
+        return None
+    owner = str(item.get("owner") or "").strip()
+    if owner not in ("me", "them"):
+        owner = ""
+    due = str(item.get("due") or "").strip() or None
+    if due and not _DUE_RE.match(due):
+        due = None
+    return {"text": text[:60], "owner": owner, "due": due}
+
+
+def todo_text(todo) -> str:
+    """待办的纯文本形式（画像/向量/展示用），兼容旧字符串格式。"""
+    if isinstance(todo, str):
+        return todo
+    if isinstance(todo, dict):
+        return str(todo.get("text") or "")
+    return ""
 
 
 def parse_card(text: str):
@@ -96,10 +132,13 @@ def parse_card(text: str):
         return [str(x).strip()[:60] for x in items if str(x).strip()][:cap]
 
     card = {
+        "v": CARD_VERSION,
         "summary": str(data.get("summary") or "").strip()[:120],
         "intent": str(data.get("intent") or "").strip()[:20],
         "entities": str_list("entities", 8),
-        "todos": str_list("todos", 5),
+        "todos": [t for t in (_parse_todo(x) for x in
+                              (data.get("todos") if isinstance(data.get("todos"), list) else []))
+                  if t][:5],
         "sentiment": str(data.get("sentiment") or "").strip()[:10],
     }
     return card if card["summary"] else None
@@ -114,7 +153,8 @@ def ensure_cards(llm, store: DerivedStore, target: str, emails: list,
     """
     hashes = [email_hash(e) for e in emails]
     table = store.data.setdefault("cards", {})
-    cards = [table.get(h) for h in hashes]
+    cards = [c if isinstance(c, dict) and c.get("v") == CARD_VERSION else None
+             for c in (table.get(h) for h in hashes)]
     todo = [(i, emails[i]) for i, c in enumerate(cards) if not c]
 
     def gen(item):
@@ -164,7 +204,7 @@ def _profile_line(index: int, email, card) -> str:
         if card.get("summary"):
             line += f" | {card['summary']}"
         if card.get("todos"):
-            line += " | 待办: " + "；".join(card["todos"])
+            line += " | 待办: " + "；".join(t for t in (todo_text(x) for x in card["todos"]) if t)
     else:
         line += " | " + re.sub(r"\s+", " ", email.body.strip())[:60]
     return line
@@ -220,7 +260,7 @@ def _vector_text(email, card) -> str:
     if card and card.get("summary"):
         text += "\n" + card["summary"]
         if card.get("todos"):
-            text += "\n" + "；".join(card["todos"])
+            text += "\n" + "；".join(t for t in (todo_text(x) for x in card["todos"]) if t)
     else:
         text += "\n" + email.body[:300]
     return text

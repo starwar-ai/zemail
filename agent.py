@@ -7,6 +7,7 @@ tools 时首轮调用即抛错，由调用方（Analyzer.investigate_stream）�
 import json
 import re
 
+from preprocess import todo_text
 from retrieval import EmailIndex, catalog_line
 from threads import normalize_subject
 
@@ -113,7 +114,7 @@ class EmailToolbox:
                 haystacks.append(("信息卡", " ".join([
                     str(card.get("summary") or ""),
                     " ".join(str(x) for x in card.get("entities") or []),
-                    "；".join(str(x) for x in card.get("todos") or []),
+                    "；".join(todo_text(x) for x in card.get("todos") or []),
                 ])))
             matched = []
             for label, text in haystacks:

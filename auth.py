@@ -16,6 +16,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 ROLES = ("admin", "user")
 USERNAME_RE = re.compile(r"^[\w.@-]{2,32}$")
 EMAIL_ADDR_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+WECOM_USERID_RE = re.compile(r"^[\w.@|-]{1,64}$")
 # 用户可在个人中心覆盖的邮箱（IMAP）设置项，未设置的项回退系统默认
 MAIL_SETTING_FIELDS = ("email_address", "email_password", "imap_host", "imap_port")
 
@@ -135,6 +136,45 @@ class UserStore:
                 data[username]["report_prompt"] = prompt
             else:
                 data[username].pop("report_prompt", None)
+            self._save(data)
+
+    def get_style_note(self, username: str) -> str:
+        """用户的起草风格补充说明（手动校正模仿口吻），未设置返回空串。"""
+        user = self._load().get(username)
+        return (user or {}).get("style_note") or ""
+
+    def set_style_note(self, username: str, note: str) -> None:
+        """保存起草风格补充说明；空串表示清除。"""
+        if len(note) > 500:
+            raise UserError("风格补充说明不能超过 500 字")
+        with self._lock:
+            data = self._load()
+            if username not in data:
+                raise UserError("用户不存在")
+            if note:
+                data[username]["style_note"] = note
+            else:
+                data[username].pop("style_note", None)
+            self._save(data)
+
+    def get_wecom_userid(self, username: str) -> str:
+        """用户绑定的企业微信 userid（用于监控消息推送），未设置返回空串。"""
+        user = self._load().get(username)
+        return (user or {}).get("wecom_userid") or ""
+
+    def set_wecom_userid(self, username: str, userid: str) -> None:
+        """保存用户绑定的企业微信 userid；空串表示解除绑定。"""
+        userid = userid.strip()
+        if userid and not WECOM_USERID_RE.match(userid):
+            raise UserError("企业微信 userid 只能包含字母、数字、. _ @ | -")
+        with self._lock:
+            data = self._load()
+            if username not in data:
+                raise UserError("用户不存在")
+            if userid:
+                data[username]["wecom_userid"] = userid
+            else:
+                data[username].pop("wecom_userid", None)
             self._save(data)
 
     def get_mail_settings(self, username: str) -> dict:

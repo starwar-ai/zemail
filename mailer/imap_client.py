@@ -237,13 +237,16 @@ class EmailMessage:
         return text
 
 
-def parse_raw_email(raw: bytes, own_addr: str, target: str, body_chars: int = 2000):
-    """解析原始邮件字节；与 target 无关时返回 None。"""
+def parse_raw_email(raw: bytes, own_addr: str, target, body_chars: int = 2000):
+    """解析原始邮件字节；与 target（地址或地址集合）无关时返回 None。"""
+    targets = ({target} if isinstance(target, str)
+               else set(target))
+    targets = {t.lower() for t in targets}
     msg = BytesParser(policy=policy.default).parsebytes(raw)
     from_addr = str(msg.get("From", ""))
     to_addrs = ", ".join(str(msg.get(h, "")) for h in ("To", "Cc") if msg.get(h))
     addr_pool = {a.lower() for _, a in getaddresses([from_addr, to_addrs])}
-    if target.lower() not in addr_pool:
+    if not targets & addr_pool:
         return None
     try:
         date = parsedate_to_datetime(str(msg.get("Date", "")))
@@ -345,27 +348,33 @@ class IMAPFetcher:
                 continue
         return sorted(ids, key=lambda x: int(x))
 
-    def fetch_correspondence(self, target: str) -> list:
+    def fetch_correspondence(self, target) -> list:
         """返回与 target 的往来邮件列表，按时间升序。
 
+        target 可以是单个地址（字符串）或地址列表（联系人的多个地址）；
+        列表时按全部地址检索合并，缓存键取第一个地址（主地址）。
         配置了 cache_dir 时，结果缓存在本地：再次分析同一地址时，IMAP 搜索
         会带 SINCE 日期条件（最近一封缓存邮件往前回 1 天），只有新邮件才
         下载正文，重叠部分靠去重合并。
         """
-        target = target.strip().lower()
+        targets = [target] if isinstance(target, str) else list(target)
+        targets = [t.strip().lower() for t in targets if t and t.strip()]
+        if not targets:
+            return []
+        cache_key = targets[0]
         if not self.cache_dir:
             since = self._full_since()
-            return self._fetch(target, since)
+            return self._fetch(targets, since)
         from .cache import load_emails, merge_emails, save_emails
-        cached = load_emails(self.cache_dir, target)
+        cached = load_emails(self.cache_dir, cache_key)
         if cached and cached[-1].date > dt.datetime.min:
             # 增量抓取：从最近一封缓存邮件往前回看 1 天，重叠部分靠去重合并
             since = cached[-1].date - dt.timedelta(days=1)
         else:
             since = self._full_since()
-        fresh = self._fetch(target, since)
+        fresh = self._fetch(targets, since)
         merged = merge_emails(cached, fresh)
-        save_emails(self.cache_dir, target, merged)
+        save_emails(self.cache_dir, cache_key, merged)
         return merged
 
     def _full_since(self):
@@ -374,8 +383,8 @@ class IMAPFetcher:
             return dt.datetime.now() - dt.timedelta(days=self.lookback_days)
         return None
 
-    def _fetch(self, target: str, since) -> list:
-        """从 IMAP 抓取 since 之后（None 表示不限）与 target 的往来邮件，按时间升序。"""
+    def _fetch(self, targets: list, since) -> list:
+        """从 IMAP 抓取 since 之后（None 表示不限）与 targets 的往来邮件，按时间升序。"""
         messages, seen = [], set()
         conn = imaplib.IMAP4_SSL(self.host, self.port)
         try:
@@ -383,7 +392,10 @@ class IMAPFetcher:
             for folder in self._resolve_folders(conn):
                 if not self._select(conn, folder):
                     continue
-                ids = self._search(conn, target, since)
+                ids = set()
+                for addr in targets:
+                    ids.update(self._search(conn, addr, since))
+                ids = sorted(ids, key=lambda x: int(x))
                 # max_results <= 0 表示不限数量（ids[-0:] 即全部）
                 selected = ids[-self.max_results:] if self.max_results > 0 else ids
                 for num in selected:
@@ -391,7 +403,8 @@ class IMAPFetcher:
                         typ, data = conn.fetch(num, "(BODY.PEEK[])")
                         if typ != "OK" or not data or not isinstance(data[0], tuple):
                             continue
-                        parsed = parse_raw_email(data[0][1], self.user, target, self.body_chars)
+                        parsed = parse_raw_email(data[0][1], self.user, targets,
+                                                 self.body_chars)
                     except Exception:
                         continue
                     if parsed is None or (since and parsed.date < since):

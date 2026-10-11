@@ -34,6 +34,11 @@ REPORT_INSTRUCTION = (
     "并融入对话中已经明确的结论与新发现。"
 )
 
+# 深度调研流式输出中「调查轨迹 / 最终结论」的分界标记：标记之前是工具调用
+# 轨迹（仅作进度展示），之后才是结论正文。前端据此把轨迹折叠展示，「存为报告」
+# 只保存结论（static/index.html 中保持同一标记）。
+INVESTIGATE_FINAL_MARK = "\n\n━━━━ 调查结论 ━━━━\n\n"
+
 
 class LLMClient:
     """OpenAI 兼容的 chat/completions 客户端。"""
@@ -528,8 +533,9 @@ class Analyzer:
         """深度调研：优先由 DSH（DeepSeek Harness）agent 在物化出的邮件工作区里
         用 grep/read 等工具反复调查取证；DSH 未安装或运行失败时回退内置 harness
         （agent.py 工具循环），模型接口不支持 function calling 时回退普通追问。
-        进度轨迹与最终结论都作为文本流产出；结论经护栏层校验（引用越界/原文
-        片段核对/覆盖率统计）并写审计日志，会话与历史记录问题与带护栏块的结论。"""
+        进度轨迹与最终结论都作为文本流产出，两者之间以 INVESTIGATE_FINAL_MARK
+        分界；结论经护栏层校验（引用越界/原文片段核对/覆盖率统计）并写审计日志，
+        会话与历史记录问题与带护栏块的结论。"""
         sess = self._get(user)
         if sess is None:
             raise RuntimeError("没有进行中的分析会话，请先发送邮箱地址开始分析")
@@ -560,7 +566,8 @@ class Analyzer:
                 final = payload
         if not final:
             raise RuntimeError("调研未产生结论")
-        yield "\n\n" + self._finish_investigation(sess, user, text, final, "builtin")
+        yield INVESTIGATE_FINAL_MARK + \
+            self._finish_investigation(sess, user, text, final, "builtin")
 
     def _investigate_dsh(self, sess, user: str, text: str):
         """DSH 路径：把会话邮件物化为工作区，驱动 DSH agent 调查取证。"""
@@ -583,7 +590,8 @@ class Analyzer:
                 final = payload
         if not final:
             raise RuntimeError("调研未产生结论")
-        yield "\n\n" + self._finish_investigation(sess, user, text, final, "dsh")
+        yield INVESTIGATE_FINAL_MARK + \
+            self._finish_investigation(sess, user, text, final, "dsh")
 
     def _finish_investigation(self, sess, user: str, text: str, final: str,
                               engine: str) -> str:

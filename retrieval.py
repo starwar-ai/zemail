@@ -13,6 +13,8 @@ import math
 import re
 from collections import Counter
 
+from preprocess import todo_text
+
 _SEG_RE = re.compile(r"[一-鿿]+|[a-zA-Z0-9]+")
 
 
@@ -94,7 +96,7 @@ class EmailIndex:
                         str(x) for x in card.get("entities") or []))).items():
                     counts[t] += c * self.SUBJECT_WEIGHT
                 for t, c in Counter(tokenize(" ".join(
-                        str(x) for x in card.get("todos") or []))).items():
+                        todo_text(x) for x in card.get("todos") or []))).items():
                     counts[t] += c * self.CARD_WEIGHT
             for t in _date_tokens(e.date):
                 counts[t] += 1

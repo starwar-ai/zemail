@@ -27,12 +27,17 @@ from auth import UserError, UserStore, admin_required, current_user, login_requi
 from bot import EMAIL_RE
 from config import (RUNTIME_SETTINGS, load_config, load_runtime_settings,
                     save_runtime_settings)
+from contacts import ContactError, ContactHub
 from exporter import build_report_docx
 from mailer import IMAPFetcher
 from mailer.cache import delete_cache, load_emails
+from monitor import Monitor, MonitorHub
+import draft
+import overview
 from preprocess import DerivedStore, delete_derived, load_derived
 from summaries import delete_summaries
 from threads import group_threads, normalize_subject, thread_report as gen_thread_report
+from wecom import WeComClient
 
 JOB_TTL_SECONDS = 3600
 
@@ -132,7 +137,7 @@ def create_app(cfg=None):
     ] if not ok]
     if missing:
         app.logger.warning("配置缺失：%s（请检查 .env）", ", ".join(missing))
-        print(f"⚠️  配置缺失：{', '.join(missing)}，请检查 .env 后重启", flush=True)
+        print(f"配置缺失：{', '.join(missing)}，请检查 .env 后重启", flush=True)
     llm = LLMClient(cfg.llm_api_base, cfg.llm_api_key, cfg.llm_model)
     card_llm = LLMClient(cfg.llm_api_base, cfg.llm_api_key,
                          cfg.llm_card_model or cfg.llm_model)
@@ -166,6 +171,23 @@ def create_app(cfg=None):
             max_results=cfg.mail_max_results, body_chars=cfg.email_body_chars,
             cache_dir=user_cache_dir(username),
         )
+
+    # 企业微信推送客户端（监控消息用）；未配置时监控事件只落站内
+    wecom_client = None
+    if cfg.wecom_corpid and cfg.wecom_secret and cfg.wecom_agentid:
+        wecom_client = WeComClient(cfg.wecom_corpid, cfg.wecom_secret,
+                                   cfg.wecom_agentid, cfg.wecom_api_base)
+    monitor_hub = MonitorHub(cfg.monitor_data_dir)
+    contact_hub = ContactHub(cfg.contacts_data_dir)
+
+    def resolve_target(username: str, target: str) -> tuple:
+        """把分析键解析为（抓取地址列表，联系人显示名）；未建档返回（[地址], ""）。"""
+        return contact_hub.store(username).resolve(target)
+
+    monitor = Monitor(cfg, users, monitor_hub, get_fetcher, card_llm,
+                      wecom_client, resolve=resolve_target,
+                      logger=lambda msg: app.logger.warning("%s", msg))
+    monitor.start()
 
     # 每个登录用户一个 Analyzer：历史记录落在 data/sessions/<用户名>/ 下，互不可见
     analyzers = {}
@@ -216,7 +238,8 @@ def create_app(cfg=None):
             set_job(job_id, status="error", error=f"邮箱连接未配置。{MAIL_CONFIG_HINT}")
             return
         try:
-            emails = fetcher.fetch_correspondence(target)
+            addresses, _ = resolve_target(username, target)
+            emails = fetcher.fetch_correspondence(addresses)
         except Exception as exc:
             set_job(job_id, status="error",
                     error=f"抓取邮件失败（IMAP {fetcher.host}:{fetcher.port}）：{exc}")
@@ -480,20 +503,41 @@ def create_app(cfg=None):
     @app.get("/api/targets")
     @login_required
     def targets():
-        """侧边栏目标列表：当前用户的历史记录 + 会话状态。"""
+        """侧边栏联系人列表：当前用户的历史记录 + 通讯簿建档 + 会话状态。"""
         username = current_user()["username"]
         analyzer = get_analyzer(username)
-        result = []
+        contacts = contact_hub.store(username).contact_map()
+        result, seen = [], set()
         for item in history.list_targets(user_history_dir()):
             target = item["target"]
+            seen.add(target)
             emails = load_emails(user_cache_dir(username), target)
+            info = contacts.get(target) or {}
             result.append({
                 "target": target,
-                "name": _display_name(emails, target),
+                "name": info.get("name") or _display_name(emails, target),
+                "company": info.get("company") or "",
+                "title": info.get("title") or "",
+                "addresses": info.get("addresses") or [target],
                 "sessions": item["sessions"],
                 "updated": item["updated"],
                 "email_count": len(emails),
                 "has_session": analyzer.has_session(_session_user(username, target)),
+            })
+        # 已建档但尚未分析的联系人也列出（点击后可发起分析）
+        for key, info in contacts.items():
+            if key in seen:
+                continue
+            result.append({
+                "target": key,
+                "name": info.get("name") or "",
+                "company": info.get("company") or "",
+                "title": info.get("title") or "",
+                "addresses": info.get("addresses") or [key],
+                "sessions": 0,
+                "updated": "",
+                "email_count": len(load_emails(user_cache_dir(username), key)),
+                "has_session": False,
             })
         return jsonify({"targets": result})
 
@@ -566,7 +610,8 @@ def create_app(cfg=None):
                 return
             try:
                 before = len(load_emails(user_cache_dir(username), target))
-                emails = fetcher.fetch_correspondence(target)
+                addresses, _ = resolve_target(username, target)
+                emails = fetcher.fetch_correspondence(addresses)
             except Exception as exc:
                 set_job(job_id, status="error",
                         error=f"抓取邮件失败（IMAP {fetcher.host}:{fetcher.port}）：{exc}")
@@ -729,8 +774,8 @@ def create_app(cfg=None):
     def chat_investigate():
         """深度调研：模型在 harness 循环中调用 grep/检索/读信/线程工具多轮调查后作答。
 
-        流式返回：先输出工具调用轨迹（每行一条），再输出最终结论；模型接口不支持
-        function calling 时自动回退为普通追问。
+        流式返回：先输出工具调用轨迹（每行一条），再以 analyzer.INVESTIGATE_FINAL_MARK
+        分界输出最终结论；模型接口不支持 function calling 时自动回退为普通追问（无分界标记）。
         """
         data = request.get_json(silent=True) or {}
         message = str(data.get("message", "")).strip()
@@ -923,6 +968,7 @@ def create_app(cfg=None):
         delete_cache(user_cache_dir(username), target)
         delete_summaries(user_cache_dir(username), target)
         delete_derived(user_cache_dir(username), target)
+        monitor_hub.store(username).remove_target(target)
         if not removed:
             return jsonify({"error": "该目标暂无记录"}), 404
         return jsonify({"ok": True})
@@ -1129,6 +1175,326 @@ def create_app(cfg=None):
             return jsonify({"error": "请提供有效的目标邮箱地址"}), 400
         username = current_user()["username"]
         get_analyzer(username).reset(_session_user(username, match.group(0)))
+        return jsonify({"ok": True})
+
+    # ---------- 监控与承诺台账 ----------
+
+    overview_cache = {}  # username -> (时间戳, 响应体)：全景计算只读本地缓存，60 秒内复用
+
+    @app.get("/api/overview")
+    @login_required
+    def overview_api():
+        """客户全景：全部联系人的关系健康度汇总（按健康度升序），纯本地计算。"""
+        username = current_user()["username"]
+        now = time.time()
+        cached = overview_cache.get(username)
+        if cached and request.args.get("refresh") != "1" \
+                and now - cached[0] < 60:
+            return jsonify(cached[1])
+        store = monitor_hub.store(username)
+        watch = store.get_watch()
+        contacts = contact_hub.store(username).contact_map()
+
+        def target_name(target: str) -> str:
+            info = contacts.get(target) or {}
+            return info.get("name") or _display_name(
+                load_emails(user_cache_dir(username), target), target)
+
+        targets = {t["target"]: target_name(t["target"])
+                   for t in history.list_targets(user_history_dir())}
+        for target in watch:
+            if target not in targets:
+                targets[target] = target_name(target)
+        for key, info in contacts.items():
+            targets.setdefault(key, info.get("name") or "")
+        rows = overview.build_overview(
+            [{"target": t, "name": n} for t, n in targets.items()],
+            user_cache_dir(username), store, watch)
+        payload = {"contacts": rows,
+                   "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+        overview_cache[username] = (now, payload)
+        return jsonify(payload)
+
+    @app.get("/api/monitor/watch")
+    @login_required
+    def monitor_watch_list():
+        """监控清单（含每个联系人的轮询状态）。"""
+        username = current_user()["username"]
+        watch = monitor_hub.store(username).get_watch()
+        result = []
+        for target, entry in sorted(watch.items()):
+            state = entry.get("state") or {}
+            result.append({
+                "target": target,
+                "unreplied_days": entry.get("unreplied_days") or 2,
+                "created": entry.get("created") or "",
+                "last_check": state.get("last_check") or "",
+            })
+        return jsonify({"watch": result})
+
+    @app.post("/api/monitor/watch")
+    @login_required
+    def monitor_watch_add():
+        """添加/更新监控联系人；首次轮询只记录基线并收割存量承诺，不推送历史。"""
+        data = request.get_json(silent=True) or {}
+        match = _match_email(data.get("target", ""))
+        if not match:
+            return jsonify({"error": "请提供有效的邮箱地址"}), 400
+        try:
+            unreplied_days = int(data.get("unreplied_days") or 2)
+        except (TypeError, ValueError):
+            return jsonify({"error": "未回复提醒天数必须是整数"}), 400
+        try:
+            monitor_hub.store(current_user()["username"]).add_watch(
+                match.group(0), unreplied_days)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        return jsonify({"ok": True})
+
+    @app.delete("/api/monitor/watch/<path:email>")
+    @login_required
+    def monitor_watch_remove(email: str):
+        match = _match_email(email)
+        if not match:
+            return jsonify({"error": "请提供有效的邮箱地址"}), 400
+        monitor_hub.store(current_user()["username"]).remove_watch(match.group(0))
+        return jsonify({"ok": True})
+
+    @app.get("/api/monitor/commitments")
+    @login_required
+    def monitor_commitments():
+        """承诺台账：可按 status（open/done/dismissed）与 target 过滤。"""
+        store = monitor_hub.store(current_user()["username"])
+        status = str(request.args.get("status", "")).strip() or None
+        target = str(request.args.get("target", "")).strip() or None
+        if status and status not in ("open", "done", "dismissed"):
+            return jsonify({"error": "status 必须是 open/done/dismissed"}), 400
+        return jsonify({"commitments": store.list_commitments(status=status,
+                                                              target=target)})
+
+    @app.post("/api/monitor/commitments/<cid>")
+    @login_required
+    def monitor_commitment_update(cid: str):
+        """更新台账条目：标记完成/忽略/重开，或修正内容与期限。"""
+        data = request.get_json(silent=True) or {}
+        fields = {}
+        if "status" in data:
+            if data["status"] not in ("open", "done", "dismissed"):
+                return jsonify({"error": "status 必须是 open/done/dismissed"}), 400
+            fields["status"] = data["status"]
+        if "due" in data:
+            due = str(data.get("due") or "").strip() or None
+            if due and not re.match(r"^\d{4}-\d{2}-\d{2}$", due):
+                return jsonify({"error": "due 格式须为 YYYY-MM-DD"}), 400
+            fields["due"] = due
+        if "text" in data:
+            text = str(data["text"]).strip()
+            if not text:
+                return jsonify({"error": "内容不能为空"}), 400
+            fields["text"] = text[:60]
+        if "owner" in data:
+            if data["owner"] not in ("", "me", "them"):
+                return jsonify({"error": "owner 必须是 me/them"}), 400
+            fields["owner"] = data["owner"]
+        if not fields:
+            return jsonify({"error": "没有可更新的字段"}), 400
+        store = monitor_hub.store(current_user()["username"])
+        if not store.update_commitment(cid, **fields):
+            return jsonify({"error": "条目不存在"}), 404
+        return jsonify({"ok": True})
+
+    @app.get("/api/monitor/events")
+    @login_required
+    def monitor_events():
+        """监控事件流（新邮件/催办/未回复/语气预警）与未读数。"""
+        store = monitor_hub.store(current_user()["username"])
+        return jsonify({"events": store.list_events(),
+                        "unread": store.unread_count()})
+
+    @app.post("/api/monitor/events/read")
+    @login_required
+    def monitor_events_read():
+        monitor_hub.store(current_user()["username"]).mark_all_read()
+        return jsonify({"ok": True})
+
+    # ---------- AI 回复起草 ----------
+
+    @app.post("/api/draft")
+    @login_required
+    def draft_generate():
+        """基于往来上下文生成三个语气版本的回复草稿（只起草，不发送）。
+
+        知情起草：自动挂接往来画像、对方最新来信所在线程与未闭环承诺；
+        instruction 可传补充要求（如"婉拒降价"）。
+        """
+        data = request.get_json(silent=True) or {}
+        match = _match_email(data.get("target", ""))
+        if not match:
+            return jsonify({"error": "请提供有效的目标邮箱地址"}), 400
+        target = match.group(0)
+        username = current_user()["username"]
+        emails = load_emails(user_cache_dir(username), target)
+        if not emails:
+            return jsonify({"error": "没有该邮箱的缓存邮件，请先发起分析"}), 409
+        cards, profile = load_derived(user_cache_dir(username), target, emails)
+        commitments = monitor_hub.store(username).list_commitments(
+            status="open", target=target)
+        instruction = str(data.get("instruction", "")).strip()[:500]
+        # 写作风格画像（按发出邮件内容哈希缓存）；失败不阻断起草
+        style = ""
+        try:
+            style = draft.ensure_style(card_llm, DerivedStore(user_cache_dir(username),
+                                                            target), target, emails)
+        except Exception:
+            pass
+        try:
+            result = draft.generate_drafts(
+                llm, target, emails, cards=cards, profile=profile,
+                commitments=commitments, style=style,
+                style_note=users.get_style_note(username),
+                instruction=instruction)
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+        if not result:
+            return jsonify({"error": "往来邮件中没有对方来信，无法起草回复"}), 409
+        return jsonify(result)
+
+    # ---------- 通讯簿（企业 / 联系人 / 多地址） ----------
+
+    @app.get("/api/contacts")
+    @login_required
+    def contacts_list():
+        store = contact_hub.store(current_user()["username"])
+        items = sorted(store.contact_map().values(),
+                       key=lambda c: (c.get("company") or "￿",
+                                      c.get("name") or c.get("key") or ""))
+        return jsonify({"companies": store.list_companies(),
+                        "contacts": items})
+
+    @app.post("/api/companies")
+    @login_required
+    def company_add():
+        data = request.get_json(silent=True) or {}
+        store = contact_hub.store(current_user()["username"])
+        try:
+            company = store.add_company(data.get("name"))
+        except ContactError as exc:
+            return jsonify({"error": str(exc)}), 400
+        return jsonify({"company": company})
+
+    @app.post("/api/companies/<cid>")
+    @login_required
+    def company_rename(cid: str):
+        data = request.get_json(silent=True) or {}
+        store = contact_hub.store(current_user()["username"])
+        try:
+            store.rename_company(cid, data.get("name"))
+        except ContactError as exc:
+            return jsonify({"error": str(exc)}), 400
+        return jsonify({"ok": True})
+
+    @app.delete("/api/companies/<cid>")
+    @login_required
+    def company_delete(cid: str):
+        store = contact_hub.store(current_user()["username"])
+        try:
+            store.delete_company(cid)
+        except ContactError as exc:
+            return jsonify({"error": str(exc)}), 400
+        return jsonify({"ok": True})
+
+    @app.post("/api/contacts")
+    @login_required
+    def contact_add():
+        data = request.get_json(silent=True) or {}
+        store = contact_hub.store(current_user()["username"])
+        try:
+            contact = store.add_contact(
+                data.get("name"), data.get("addresses"),
+                company_id=data.get("company_id") or "",
+                title=data.get("title") or "",
+                note=data.get("note") or "")
+        except ContactError as exc:
+            return jsonify({"error": str(exc)}), 400
+        return jsonify({"contact": contact})
+
+    @app.post("/api/contacts/<cid>")
+    @login_required
+    def contact_update(cid: str):
+        data = request.get_json(silent=True) or {}
+        store = contact_hub.store(current_user()["username"])
+        fields = {k: data[k] for k in
+                  ("name", "title", "note", "company_id", "addresses")
+                  if k in data}
+        try:
+            ok = store.update_contact(cid, **fields)
+        except ContactError as exc:
+            return jsonify({"error": str(exc)}), 400
+        if not ok:
+            return jsonify({"error": "联系人不存在"}), 404
+        return jsonify({"ok": True})
+
+    @app.delete("/api/contacts/<cid>")
+    @login_required
+    def contact_delete(cid: str):
+        store = contact_hub.store(current_user()["username"])
+        if not store.delete_contact(cid):
+            return jsonify({"error": "联系人不存在"}), 404
+        return jsonify({"ok": True})
+
+    # ---------- 推送绑定（企业微信 userid） ----------
+    @app.get("/api/me/notify")
+    @login_required
+    def me_notify_get():
+        username = current_user()["username"]
+        return jsonify({
+            "wecom_userid": users.get_wecom_userid(username),
+            "wecom_configured": wecom_client is not None,
+        })
+
+    @app.post("/api/me/notify")
+    @login_required
+    def me_notify_save():
+        data = request.get_json(silent=True) or {}
+        try:
+            users.set_wecom_userid(current_user()["username"],
+                                   str(data.get("wecom_userid", "")))
+        except UserError as exc:
+            return jsonify({"error": str(exc)}), 400
+        return jsonify({"ok": True})
+
+    @app.post("/api/me/notify/test")
+    @login_required
+    def me_notify_test():
+        """向自己绑定的企业微信账号发一条测试消息。"""
+        if not wecom_client:
+            return jsonify({"error": "系统未配置企业微信应用，请联系管理员"}), 400
+        userid = users.get_wecom_userid(current_user()["username"])
+        if not userid:
+            return jsonify({"error": "请先填写企业微信 userid"}), 400
+        try:
+            wecom_client.send_markdown(userid, "监控推送测试：绑定成功，"
+                                               "新邮件与承诺提醒将推送到这里。")
+        except Exception as exc:
+            return jsonify({"error": f"推送失败：{exc}"}), 500
+        return jsonify({"ok": True})
+
+    @app.get("/api/me/style-note")
+    @login_required
+    def me_style_note_get():
+        return jsonify({"style_note": users.get_style_note(
+            current_user()["username"])})
+
+    @app.post("/api/me/style-note")
+    @login_required
+    def me_style_note_save():
+        """保存起草风格补充说明（手动校正「我的语气」），空串清除。"""
+        data = request.get_json(silent=True) or {}
+        try:
+            users.set_style_note(current_user()["username"],
+                                 str(data.get("style_note", "")).strip())
+        except UserError as exc:
+            return jsonify({"error": str(exc)}), 400
         return jsonify({"ok": True})
 
     return app

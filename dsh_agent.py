@@ -17,6 +17,7 @@ import tempfile
 import threading
 import uuid
 
+from preprocess import todo_text
 from retrieval import catalog_line
 from threads import normalize_subject
 
@@ -66,7 +67,7 @@ def materialize_workspace(root: str, target: str, emails: list, cards: list = No
             if card.get("entities"):
                 extra.append("实体: " + "、".join(str(x) for x in card["entities"]))
             if card.get("todos"):
-                extra.append("待办: " + "；".join(str(x) for x in card["todos"]))
+                extra.append("待办: " + "；".join(todo_text(x) for x in card["todos"]))
             if extra:
                 text += "\n\n【预处理信息卡】\n" + "\n".join(extra)
         with open(os.path.join(mails_dir, f"{n:04d}.md"), "w",

@@ -48,6 +48,17 @@ class Config:
     session_ttl_minutes: int = 120
     session_history_dir: str = "data/sessions"
 
+    # 后台监控（新邮件推送 / 承诺催办 / 未回复提醒）
+    monitor_interval_minutes: int = 30  # 轮询间隔
+    monitor_data_dir: str = "data/monitor"
+    monitor_quiet_start: int = 23  # 静默时段起点（小时，0-23）
+    monitor_quiet_end: int = 7     # 静默时段终点（小时，0-23）
+    digest_hour: int = 8           # 每日简报推送时间（小时，-1 关闭）
+    digest_weekly_day: int = -1    # 每周简报推送日（0=周一…6=周日，-1 关闭）
+
+    # 通讯簿（企业/联系人/多地址）
+    contacts_data_dir: str = "data/contacts"
+
     # Web 用户与权限
     secret_key: str = ""
     users_file: str = "data/users.json"
@@ -76,6 +87,9 @@ RUNTIME_SETTINGS = {
     "email_body_chars": ("单封正文截断长度（字符）", 100),
     "llm_context_chars": ("注入模型的邮件上下文总量（字符）", 1000),
     "session_ttl_minutes": ("分析会话有效期（分钟）", 1),
+    "monitor_interval_minutes": ("监控轮询间隔（分钟）", 5),
+    "digest_hour": ("每日简报推送时间（小时，-1 关闭）", -1),
+    "digest_weekly_day": ("每周简报推送日（0=周一…6=周日，-1 关闭）", -1),
 }
 
 

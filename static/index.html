@@ -100,19 +100,18 @@
   }
   .brand-sub { font-size: 12px; color: var(--text-3); margin-top: 4px; }
 
-  .analyze-box { padding: 14px 16px; border-bottom: 1px solid var(--border); }
-  .analyze-box input {
-    width: 100%; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 8px;
-    font-size: 13px; outline: none; margin-bottom: 8px;
-  }
-  .analyze-box input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+  /* 抓取进度条容器：进度隐藏时不占位（padding 与分隔线都在 .progress 上） */
+  .analyze-box { padding: 0; }
   .btn-primary {
     width: 100%; padding: 9px 0; border: none; border-radius: 8px; font-size: 13px;
     font-weight: 600; background: var(--primary); color: #fff;
   }
   .btn-primary:hover { background: var(--primary-dark); }
   .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
-  .progress { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--text-2); }
+  .progress {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2);
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+  }
   .spinner {
     width: 14px; height: 14px; border: 2px solid #d1d5db; border-top-color: var(--primary);
     border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0;
@@ -124,6 +123,14 @@
     padding: 12px 16px 6px; font-size: 12px; font-weight: 600; color: var(--text-3);
     text-transform: uppercase; letter-spacing: .5px;
   }
+  .target-list-head .list-head-actions { display: flex; align-items: center; gap: 2px; }
+  /* 列表头「+ 新建」：小型主色按钮 */
+  .btn-new {
+    border: none; background: var(--primary); color: #fff; font-size: 12px;
+    font-weight: 600; padding: 4px 10px; border-radius: 6px; line-height: 1.5;
+    letter-spacing: 0; text-transform: none;
+  }
+  .btn-new:hover { background: var(--primary-dark); }
   .btn-icon {
     border: none; background: none; color: var(--text-3); font-size: 15px;
     padding: 2px 6px; border-radius: 6px; line-height: 1;
@@ -198,7 +205,7 @@
   #empty-state h2 { font-size: 17px; color: var(--text-2); font-weight: 600; margin-bottom: 8px; }
   #empty-state p { font-size: 13px; line-height: 1.8; }
   .empty-hint-mobile { display: none; }
-  .empty-analyze { display: none; width: 100%; max-width: 320px; margin-top: 20px; }
+  .empty-analyze { display: block; width: 100%; max-width: 320px; margin-top: 20px; }
   .empty-analyze input {
     width: 100%; padding: 10px 13px; border: 1px solid #d1d5db; border-radius: 8px;
     font-size: 16px; outline: none; margin-bottom: 8px;
@@ -501,6 +508,17 @@
   .msg.assistant { align-self: flex-start; background: #fff; border: 1px solid var(--border); border-bottom-left-radius: 4px; }
   /* 回复卡片底部操作条（存为报告） */
   .msg-actions { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border); text-align: right; }
+  /* 深度调研：工具调用轨迹折叠块（结论正文在其下按 Markdown 渲染） */
+  .trace-details { margin-bottom: 8px; }
+  .trace-details summary {
+    cursor: pointer; font-size: 12px; color: var(--text-3); user-select: none;
+  }
+  .trace-details summary:hover { color: var(--text-2); }
+  .trace-pre {
+    margin-top: 6px; font-size: 12px; line-height: 1.7; color: var(--text-3);
+    white-space: pre-wrap; word-break: break-all; background: var(--bg);
+    border-radius: 8px; padding: 8px 10px; max-height: 220px; overflow-y: auto;
+  }
   /* 输入区：一体化圆角框，文本在上、操作条在下（生成报告在左，发送在右） */
   .chat-input-row {
     display: flex; flex-direction: column; gap: 6px;
@@ -599,6 +617,8 @@
 
   /* 通用确认/输入对话框 */
   .dlg { width: 400px; }
+  /* 确认框须盖在业务弹层（联系人对话框等 .modal-mask z-index:50）之上 */
+  #dlg-mask { z-index: 65; }
   .dlg .modal-body { padding-bottom: 4px; white-space: pre-wrap; }
   #dlg-input {
     margin: 0 20px; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 8px;
@@ -783,7 +803,7 @@
   [data-theme="dark"] .mail-filter input, [data-theme="dark"] .users-add input,
   [data-theme="dark"] .users-add select, [data-theme="dark"] .settings-row input,
   [data-theme="dark"] .chat-input-row textarea, [data-theme="dark"] .profile-body textarea, [data-theme="dark"] .profile-form input,
-  [data-theme="dark"] .target-search input, [data-theme="dark"] .analyze-box input,
+  [data-theme="dark"] .target-search input,
   [data-theme="dark"] .login-card input, [data-theme="dark"] #dlg-input {
     background: #151d2b; color: var(--text); border-color: #4b5563;
   }
@@ -806,6 +826,197 @@
   [data-theme="dark"] .spinner { border-color: #4b5563; border-top-color: var(--primary); }
   [data-theme="dark"] .modal-mask, [data-theme="dark"] #drawer-mask { background: rgba(0,0,0,.6); }
   [data-theme="dark"] .sess-badge { background: #0f2e1c; }
+
+  /* ---------- 邮件监控 ---------- */
+  /* 目标项的监控铃铛：未监控时淡色常显（opacity .4），已监控（.on）主色实心 */
+  .monitor-bell {
+    border: none; background: none; color: var(--text-3); flex-shrink: 0;
+    padding: 3px; border-radius: 6px; line-height: 1; opacity: .4;
+    display: inline-flex; align-items: center;
+  }
+  .monitor-bell.on { opacity: 1; color: var(--primary); }
+  .monitor-bell:hover { background: var(--primary-light); color: var(--primary); opacity: 1; }
+  .monitor-bell svg { width: 14px; height: 14px; display: block; }
+  /* 「监控中心」导航项的未读角标 */
+  .tab-badge {
+    display: inline-block; min-width: 16px; padding: 0 5px; margin-left: 6px;
+    border-radius: 999px; background: var(--red); color: #fff;
+    font-size: 11px; line-height: 16px; text-align: center; vertical-align: 1px;
+  }
+  /* 监控页子标签（样式同报告页 .report-subtabs，选择器独立避免与报告页联动） */
+  .monitor-subtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  /* 承诺台账 */
+  #commit-table-wrap { overflow-x: auto; }
+  .commit-table tbody tr { cursor: default; }
+  .commit-text { max-width: 320px; }
+  .commit-src {
+    max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; color: var(--text-2);
+  }
+  .badge.dismissed { background: #f3f4f6; color: var(--text-2); }
+  .badge.warn { background: #fef3c7; color: #92400e; }
+  .badge.alert { background: var(--red-bg); color: var(--red); }
+  .due-today { color: #92400e; font-weight: 600; white-space: nowrap; }
+  .due-overdue { color: var(--red); font-weight: 600; white-space: nowrap; }
+  /* 事件通知 */
+  .event-item {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 10px;
+  }
+  .event-item.unread { border-left: 3px solid var(--primary); }
+  .event-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .event-title { font-size: 13.5px; font-weight: 600; }
+  .event-target { font-size: 12px; color: var(--text-2); }
+  .event-time {
+    margin-left: auto; font-size: 12px; color: var(--text-3);
+    white-space: nowrap; font-variant-numeric: tabular-nums;
+  }
+  .event-content {
+    margin-top: 6px; font-size: 12.5px; color: var(--text-2);
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .profile-warn { color: #92400e; }
+  /* 深色模式补充 */
+  [data-theme="dark"] .badge.dismissed { background: #22304a; }
+  [data-theme="dark"] .badge.warn { background: #3a2a10; color: #fbbf24; }
+  [data-theme="dark"] .due-today, [data-theme="dark"] .profile-warn { color: #fbbf24; }
+  [data-theme="dark"] .event-item { background: #151d2b; border-color: #4b5563; }
+  /* 全景页「今日待办」chips */
+  .todo-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  /* 空状态的用户级页面快捷入口 */
+  .empty-quick { display: flex; gap: 10px; justify-content: center; margin-top: 18px; }
+  .empty-quick .btn-ghost { padding: 8px 22px; }
+
+  /* ---------- 客户全景 ---------- */
+  /* 顶部说明条：说明文字 + 右侧刷新按钮 */
+  .overview-note { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .overview-note span { flex: 1; min-width: 0; }
+  .overview-note .btn-ghost { flex: none; }
+  #overview-table-wrap { overflow-x: auto; }
+  .health-score { font-weight: 700; font-variant-numeric: tabular-nums; margin-right: 6px; }
+  .overview-status { display: flex; gap: 6px; flex-wrap: wrap; }
+  /* 展开行：评分依据与往来跨度 */
+  .overview-table tbody tr.overview-detail { cursor: default; }
+  .overview-detail td { background: #f9fafb; padding: 12px 18px; }
+  .overview-detail-title { font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
+  .overview-reasons { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--text-2); line-height: 1.8; }
+  .overview-span { margin-top: 8px; font-size: 12px; color: var(--text-3); }
+  [data-theme="dark"] .overview-detail td { background: #1b2636; }
+
+  /* ---------- AI 起草回复 ---------- */
+  .draft-input-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .draft-input-row input {
+    flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid #d1d5db;
+    border-radius: 8px; font-size: 13px; outline: none; background: #fff; color: inherit;
+  }
+  .draft-input-row input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+  .draft-input-row .btn-primary { width: auto; padding: 7px 18px; flex: none; }
+  .draft-subject-bar { font-size: 13px; font-weight: 600; margin: 4px 0 12px; word-break: break-all; }
+  .draft-card { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+  .draft-card-head {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    background: #f9fafb; border-bottom: 1px solid var(--border);
+  }
+  .draft-tone { font-size: 13px; font-weight: 600; }
+  .draft-card-head .btn-small { flex: none; margin-left: auto; padding: 4px 14px; font-size: 12px; }
+  .draft-body {
+    padding: 12px 14px; font-size: 13px; line-height: 1.8;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  [data-theme="dark"] .draft-input-row input { background: #151d2b; color: var(--text); border-color: #4b5563; }
+  [data-theme="dark"] .draft-card-head { background: #1b2636; }
+
+  /* ---------- 侧边栏用户级导航（客户全景 / 监控中心） ---------- */
+  .side-nav { padding: 10px 10px 6px; border-bottom: 1px solid var(--border); }
+  .side-nav-item {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 9px 12px; margin-bottom: 2px; text-align: left;
+    border: 1px solid transparent; border-radius: 8px; background: none;
+    font-size: 13px; font-weight: 600; color: var(--text-2);
+  }
+  .side-nav-item:hover { background: #f3f4f6; color: var(--text); }
+  .side-nav-item.active { background: var(--primary-light); border-color: #bfdbfe; color: var(--primary); }
+  .side-nav-icon { font-size: 14px; line-height: 1; }
+  .side-nav-item .tab-badge { margin-left: auto; }
+  [data-theme="dark"] .side-nav-item:hover { background: #1f2a3a; }
+  [data-theme="dark"] .side-nav-item.active { background: #17293f; border-color: #2d4a6f; }
+
+  /* 单色 SVG 图标尺寸（stroke=currentColor 继承文字色，深色模式自动适配） */
+  .side-nav-icon svg { width: 15px; height: 15px; display: block; }
+  #theme-toggle svg, #pwd-toggle svg { width: 16px; height: 16px; display: block; }
+  #empty-state .icon svg { width: 44px; height: 44px; display: block; }
+  .attach-icon { display: inline-flex; vertical-align: -2px; margin-right: 3px; color: var(--text-3); }
+  .attach-icon svg { width: 13px; height: 13px; display: block; }
+
+  /* ---------- 通讯簿（侧边栏分组 + 联系人管理对话框） ---------- */
+  /* 企业分组头：企业名 + 人数，可折叠；悬停显现改名/删除图标 */
+  .contact-group-head {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 8px 4px; cursor: pointer; user-select: none;
+    font-size: 12px; font-weight: 600; color: var(--text-3);
+  }
+  .contact-group-head:hover { color: var(--text-2); }
+  .cg-arrow { font-size: 10px; width: 12px; text-align: center; flex: none; }
+  .cg-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cg-count { font-weight: 400; flex: none; }
+  .contact-group-head .cg-op { visibility: hidden; flex: none; }
+  .contact-group-head:hover .cg-op { visibility: visible; }
+  .contact-group-head .cg-op svg { width: 12px; height: 12px; display: block; }
+  /* 联系人条目悬停编辑铅笔（仿 target-del，图标型） */
+  .target-edit {
+    border: none; background: none; color: var(--text-3);
+    padding: 2px 6px; border-radius: 6px; line-height: 1; flex-shrink: 0;
+    visibility: hidden;
+  }
+  .target-item:hover .target-edit { visibility: visible; }
+  .target-edit:hover { background: #f3f4f6; color: var(--text); }
+  .target-edit svg { width: 13px; height: 13px; display: block; }
+  /* 联系人管理对话框 */
+  .contact-modal { width: 520px; }
+  .contact-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+  .contact-form .form-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .contact-form .form-field.full { grid-column: 1 / -1; }
+  .contact-form label { font-size: 12px; font-weight: 600; color: var(--text-2); }
+  .contact-form input, .contact-form select, .contact-form textarea {
+    padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: 13px; outline: none; background: #fff; color: inherit;
+    font-family: inherit; width: 100%; box-sizing: border-box;
+  }
+  .contact-form input:focus, .contact-form select:focus, .contact-form textarea:focus {
+    border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+  }
+  .contact-form input.invalid { border-color: var(--red); }
+  .contact-form input:disabled { background: #f3f4f6; color: var(--text-3); cursor: not-allowed; }
+  .contact-addr-head {
+    display: flex; align-items: baseline; gap: 8px;
+    font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 6px;
+  }
+  .contact-addr-head .hint { font-weight: 400; color: var(--text-3); font-size: 11px; }
+  .contact-addr-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .contact-addr-row input { flex: 1; min-width: 0; }
+  .contact-addr-tag {
+    flex: none; font-size: 11px; color: var(--primary);
+    background: var(--primary-light); border-radius: 4px; padding: 2px 6px; white-space: nowrap;
+  }
+  .contact-addr-row .btn-icon { flex: none; }
+  .contact-addr-row .btn-icon svg { width: 13px; height: 13px; display: block; }
+  #contact-addr-add { margin-top: 2px; }
+  .contact-footer {
+    display: flex; align-items: center; gap: 8px;
+    padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--border);
+  }
+  .contact-footer .spacer { flex: 1; }
+  .contact-footer .btn-primary { width: auto; padding: 8px 24px; }
+  .contact-footer .btn-ghost { padding: 8px 16px; }
+  #contact-delete-btn { color: var(--red); font-size: 13px; }
+  [data-theme="dark"] .contact-form input,
+  [data-theme="dark"] .contact-form select,
+  [data-theme="dark"] .contact-form textarea { background: #151d2b; border-color: #4b5563; }
+  [data-theme="dark"] .contact-form input:disabled { background: #1f2a3a; }
+  @media (max-width: 768px) {
+    .contact-form { grid-template-columns: 1fr; }
+    .target-edit { visibility: visible; }
+  }
 </style>
 </head>
 <body>
@@ -817,7 +1028,7 @@
     <input type="text" id="login-username" placeholder="用户名" autocomplete="username">
     <div class="pwd-wrap">
       <input type="password" id="login-password" placeholder="密码" autocomplete="current-password">
-      <button type="button" id="pwd-toggle" title="显示密码">👁</button>
+      <button type="button" id="pwd-toggle" title="显示密码"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
     </div>
     <button id="login-btn" class="btn-primary">登 录</button>
     <div class="login-tip">忘记密码？请联系管理员重置</div>
@@ -831,22 +1042,31 @@
         <div class="brand-name">邮件分析助手</div>
         <div class="brand-sub">IMAP 抓取 · AI 分析 · 会话追问</div>
       </div>
-      <button id="theme-toggle" class="btn-icon" title="切换深色模式">🌙</button>
+      <button id="theme-toggle" class="btn-icon" title="切换深色模式"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
     </div>
     <div class="analyze-box">
-      <input type="email" id="email-input" placeholder="输入要分析的邮箱地址">
-      <button id="analyze-btn" class="btn-primary">新建分析</button>
       <div id="progress" class="progress hidden">
         <div class="spinner"></div>
         <span id="progress-text">正在抓取邮件…</span>
         <button id="analyze-cancel" class="link-btn">取消</button>
       </div>
     </div>
-    <div class="target-list-head">
-      <span>邮箱列表</span>
-      <button id="refresh-targets" class="btn-icon" title="刷新列表">⟳</button>
+    <div class="side-nav">
+      <button id="nav-overview" class="side-nav-item">
+        <span class="side-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>客户全景
+      </button>
+      <button id="nav-monitor" class="side-nav-item">
+        <span class="side-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>监控中心<span id="monitor-nav-badge" class="tab-badge hidden"></span>
+      </button>
     </div>
-    <div class="target-search"><input type="text" id="target-search" placeholder="搜索邮箱…"></div>
+    <div class="target-list-head">
+      <span>联系人</span>
+      <span class="list-head-actions">
+        <button id="contact-new-btn" class="btn-new">+ 新建</button>
+        <button id="refresh-targets" class="btn-icon" title="刷新列表">⟳</button>
+      </span>
+    </div>
+    <div class="target-search"><input type="text" id="target-search" placeholder="搜索联系人…"></div>
     <div id="target-list"></div>
     <div class="sidebar-footer">
       <div class="user-row">
@@ -877,12 +1097,16 @@
     </div>
 
     <div id="empty-state">
-      <div class="icon">📬</div>
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
       <h2>开始一次邮件分析</h2>
-      <p class="empty-hint-desktop">在左侧输入对方邮箱地址并点击「新建分析」，<br>或从目标列表中选择已抓取过的邮箱。</p>
-      <p class="empty-hint-mobile">输入对方邮箱地址开始分析，<br>或点左上角 ☰ 选择已分析过的邮箱。</p>
+      <p class="empty-hint-desktop">输入客户的邮箱地址，系统会从你的邮箱中抓取与该联系人的全部往来邮件，供 AI 分析。<br>也可从左侧联系人列表选择已抓取过的客户。</p>
+      <p class="empty-hint-mobile">输入客户的邮箱地址，系统会抓取你与该联系人的往来邮件供 AI 分析，<br>或点左上角 ☰ 选择已抓取过的联系人。</p>
+      <div class="empty-quick hidden" id="empty-quick">
+        <button id="empty-overview-btn" class="btn-ghost">客户全景</button>
+        <button id="empty-monitor-btn" class="btn-ghost">监控中心</button>
+      </div>
       <div class="empty-analyze">
-        <input type="email" id="empty-email-input" placeholder="输入要分析的邮箱地址">
+        <input type="email" id="empty-email-input" placeholder="输入客户/联系人的邮箱地址">
         <button id="empty-analyze-btn" class="btn-primary">开始分析</button>
       </div>
     </div>
@@ -963,6 +1187,7 @@
           <button id="session-btn" class="btn-primary" title="默认使用全部往来邮件；勾选部分邮件可缩小提问范围">开始提问</button>
           <span id="mail-selected-count" class="mail-selected"></span>
           <button id="fetch-btn" class="btn-ghost">同步新邮件</button>
+          <button id="draft-btn" class="btn-ghost" title="基于往来上下文生成三个语气版本的回复草稿（只起草，不发送）">AI 起草回复</button>
           <div class="more-wrap">
             <button id="more-btn" class="btn-ghost" title="更多操作">⋯</button>
             <div id="more-menu" class="more-menu hidden">
@@ -997,6 +1222,43 @@
         </div>
       </section>
     </div>
+
+    <!-- 用户级页面（与选中目标无关，由侧边栏导航进入，不属于目标页签体系） -->
+    <section id="tab-overview" class="tab-pane hidden">
+      <div class="report-meta-bar overview-note">
+        <span>全部联系人的关系健康度，按风险排序。健康度由未回复、逾期承诺、语气趋势、回复速度与往来频率合成（纯本地计算，不调用模型）。</span>
+        <button id="overview-refresh-btn" class="btn-ghost" title="强制重算（平时打开走 60 秒服务端缓存）">刷新</button>
+      </div>
+      <div class="mail-count" id="overview-count"></div>
+      <div class="todo-chips hidden" id="overview-todos"></div>
+      <div id="overview-table-wrap"></div>
+    </section>
+
+    <section id="tab-monitor" class="tab-pane hidden">
+      <div class="report-meta-bar" style="margin-bottom: 14px;">后台按管理员设置的间隔自动轮询（默认 30 分钟），检测到新邮件、逾期未闭环承诺、来信久未回复或语气异常时记录事件并推送企业微信。</div>
+      <div class="report-meta-bar hidden" id="monitor-empty-hint" style="margin-bottom: 14px;">还未开启任何监控——到左侧联系人列表点击铃铛图标即可开启。开启后后台按设定间隔自动同步往来邮件，检测新邮件、未回复、承诺逾期与语气异常。</div>
+      <div class="monitor-subtabs">
+        <button class="tab active" data-monitor-sub="commitments">承诺台账</button>
+        <button class="tab" data-monitor-sub="events">事件通知</button>
+      </div>
+      <div id="monitor-commitments-pane">
+        <div class="mail-filter">
+          <select id="commit-status" title="按状态筛选">
+            <option value="open">进行中</option>
+            <option value="done">已完成</option>
+            <option value="dismissed">已忽略</option>
+            <option value="">全部</option>
+          </select>
+          <select id="commit-target" title="按联系人筛选">
+            <option value="">全部联系人</option>
+          </select>
+        </div>
+        <div id="commit-table-wrap"></div>
+      </div>
+      <div id="monitor-events-pane" class="hidden">
+        <div id="event-list"></div>
+      </div>
+    </section>
   </main>
   <div id="drawer-mask"></div>
 </div>
@@ -1060,6 +1322,69 @@
   </div>
 </div>
 
+<div id="draft-modal-mask" class="modal-mask hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>AI 起草回复</h3>
+      <button class="modal-close" id="draft-modal-close" title="关闭">×</button>
+    </div>
+    <div class="modal-meta" id="draft-modal-meta"></div>
+    <div class="modal-body" style="white-space: normal;">
+      <div class="draft-input-row">
+        <input type="text" id="draft-instruction" placeholder="补充要求（可选），如：婉拒降价、催促付款">
+        <button id="draft-generate-btn" class="btn-primary">生成草稿</button>
+      </div>
+      <div id="draft-error" class="login-error hidden"></div>
+      <div id="draft-result"></div>
+    </div>
+  </div>
+</div>
+
+<div id="contact-modal-mask" class="modal-mask hidden">
+  <div class="modal contact-modal">
+    <div class="modal-head">
+      <h3 id="contact-modal-title">添加联系人</h3>
+      <button class="modal-close" id="contact-modal-close" title="关闭">×</button>
+    </div>
+    <div class="modal-body profile-body">
+      <div class="contact-form">
+        <div class="form-field">
+          <label for="contact-name">姓名</label>
+          <input type="text" id="contact-name" autocomplete="off" placeholder="联系人姓名">
+        </div>
+        <div class="form-field">
+          <label for="contact-company">企业</label>
+          <select id="contact-company"></select>
+        </div>
+        <div class="form-field full hidden" id="contact-company-new-wrap">
+          <label for="contact-company-new">新企业名称</label>
+          <input type="text" id="contact-company-new" autocomplete="off" placeholder="输入新企业名称">
+        </div>
+        <div class="form-field">
+          <label for="contact-title">职务</label>
+          <input type="text" id="contact-title" autocomplete="off" placeholder="选填">
+        </div>
+        <div class="form-field full">
+          <div class="contact-addr-head">邮箱地址<span class="hint">第一个为主地址（分析键）</span></div>
+          <div id="contact-addr-list"></div>
+          <button id="contact-addr-add" class="link-btn">＋ 添加地址</button>
+        </div>
+        <div class="form-field full">
+          <label for="contact-note">备注</label>
+          <textarea id="contact-note" rows="2" placeholder="选填"></textarea>
+        </div>
+      </div>
+      <div id="contact-error" class="login-error hidden"></div>
+      <div class="contact-footer">
+        <button id="contact-delete-btn" class="link-btn danger hidden">删除联系人</button>
+        <span class="spacer"></span>
+        <button id="contact-cancel-btn" class="btn-ghost">取消</button>
+        <button id="contact-save-btn" class="btn-primary">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="profile-modal-mask" class="modal-mask hidden">
   <div class="modal profile-modal">
     <div class="modal-head">
@@ -1103,6 +1428,23 @@
           <label>确认新密码<input type="password" id="profile-new-password2" autocomplete="new-password"></label>
         </div>
       </div>
+      <div class="profile-section">
+        <div class="profile-section-head"><h4>消息推送</h4></div>
+        <p class="profile-hint">绑定企业微信 userid 后，监控事件将推送到你的企业微信。userid 随底部「保存」一并提交，留空表示解绑。</p>
+        <p class="profile-hint profile-warn hidden" id="profile-wecom-unconfigured">系统未配置企业微信应用，仅支持站内事件通知</p>
+        <div class="profile-form">
+          <label>企业微信 userid<input type="text" id="profile-wecom-userid" autocomplete="off" placeholder="企业微信通讯录中的账号 ID"></label>
+        </div>
+        <div class="profile-actions">
+          <button id="profile-wecom-test-btn" class="btn-ghost">测试推送</button>
+        </div>
+      </div>
+      <div class="profile-section">
+        <div class="profile-section-head"><h4>起草风格</h4></div>
+        <p class="profile-hint">AI 起草回复的「我的语气」版本会优先遵循此说明，用于校正模仿口吻，如：对客户一律用"您"；署名用 Kai；不用感叹号。留空则仅按历史邮件自动模仿。</p>
+        <textarea id="profile-style-note" rows="3" maxlength="500" spellcheck="false"
+                  placeholder="如：对客户一律用「您」；署名用 Kai；不用感叹号"></textarea>
+      </div>
     </div>
     <div class="profile-footer">
       <button id="profile-save-btn" class="btn-primary">保存</button>
@@ -1125,7 +1467,7 @@ const el = {
   adminView: $("admin-view"), adminUserName: $("admin-user-name"),
   adminLogoutBtn: $("admin-logout-btn"), adminEnterApp: $("admin-enter-app"),
   consoleBtn: $("console-btn"),
-  emailInput: $("email-input"), analyzeBtn: $("analyze-btn"),
+  contactNewBtn: $("contact-new-btn"),
   progress: $("progress"), progressText: $("progress-text"),
   analyzeCancel: $("analyze-cancel"),
   targetList: $("target-list"), refreshTargets: $("refresh-targets"),
@@ -1145,6 +1487,8 @@ const el = {
     report: $("tab-report"), emails: $("tab-emails"),
     chat: $("tab-chat"),
   },
+  overviewPane: $("tab-overview"), monitorPane: $("tab-monitor"),
+  navOverview: $("nav-overview"), navMonitor: $("nav-monitor"),
   reportContent: $("report-content"), reportVersion: $("report-version"),
   newReportBtn: $("new-report-btn"),
   reportDelBtn: $("report-del-btn"),
@@ -1189,6 +1533,47 @@ const el = {
   profileMailTestBtn: $("profile-mail-test-btn"),
   profileNewPassword: $("profile-new-password"),
   profileNewPassword2: $("profile-new-password2"),
+  monitorNavBadge: $("monitor-nav-badge"),
+  monitorSubtabs: document.querySelectorAll("[data-monitor-sub]"),
+  monitorCommitmentsPane: $("monitor-commitments-pane"),
+  monitorEventsPane: $("monitor-events-pane"),
+  commitStatus: $("commit-status"), commitTarget: $("commit-target"),
+  commitTableWrap: $("commit-table-wrap"), eventList: $("event-list"),
+  profileWecomUserid: $("profile-wecom-userid"),
+  profileWecomTestBtn: $("profile-wecom-test-btn"),
+  profileWecomUnconfigured: $("profile-wecom-unconfigured"),
+  profileStyleNote: $("profile-style-note"),
+  overviewRefreshBtn: $("overview-refresh-btn"),
+  overviewCount: $("overview-count"),
+  overviewTableWrap: $("overview-table-wrap"),
+  draftBtn: $("draft-btn"),
+  draftModalMask: $("draft-modal-mask"),
+  draftModalClose: $("draft-modal-close"),
+  draftModalMeta: $("draft-modal-meta"),
+  draftInstruction: $("draft-instruction"),
+  draftGenerateBtn: $("draft-generate-btn"),
+  draftError: $("draft-error"),
+  draftResult: $("draft-result"),
+  emptyQuick: $("empty-quick"),
+  emptyOverviewBtn: $("empty-overview-btn"),
+  emptyMonitorBtn: $("empty-monitor-btn"),
+  monitorEmptyHint: $("monitor-empty-hint"),
+  overviewTodos: $("overview-todos"),
+  contactModalMask: $("contact-modal-mask"),
+  contactModalTitle: $("contact-modal-title"),
+  contactModalClose: $("contact-modal-close"),
+  contactName: $("contact-name"),
+  contactCompany: $("contact-company"),
+  contactCompanyNewWrap: $("contact-company-new-wrap"),
+  contactCompanyNew: $("contact-company-new"),
+  contactTitle: $("contact-title"),
+  contactAddrList: $("contact-addr-list"),
+  contactAddrAdd: $("contact-addr-add"),
+  contactNote: $("contact-note"),
+  contactError: $("contact-error"),
+  contactDeleteBtn: $("contact-delete-btn"),
+  contactCancelBtn: $("contact-cancel-btn"),
+  contactSaveBtn: $("contact-save-btn"),
 };
 
 const MAIL_PAGE_SIZE = 50;
@@ -1223,6 +1608,15 @@ const state = {
   chatAbort: null,
   deepInvestigate: false, // 「深度调研」开关：开启后提问走 agent harness（多轮工具调查）
   reportPending: false, // 下一次发送由「生成报告」按钮触发，其回复卡片才显示「存为报告」
+  watchList: [],       // 监控清单（/api/monitor/watch），含 unreplied_days 等
+  watchSet: new Set(), // 已监控目标集合，供侧边栏铃铛状态查询
+  monitorSub: "commitments", // 监控页子标签：commitments = 承诺台账，events = 事件通知
+  monitorTimer: null,  // 未读角标 60s 轮询
+  monitorUnread: 0,
+  userView: null,      // 用户级视图：null = 目标工作台，"overview" = 客户全景，"monitor" = 监控中心
+  companies: [],       // 通讯簿企业分组（/api/contacts 的 companies）
+  contacts: [],        // 通讯簿联系人建档（/api/contacts 的 contacts）
+  editingContact: null, // 联系人对话框正在编辑的联系人（null = 新建）
 };
 
 function targetKey() {
@@ -1281,6 +1675,59 @@ function throttledRenderer(node) {
   return {
     push(text) { latest = text; if (!timer) timer = setTimeout(flush, 100); },
     flush() { if (timer) { clearTimeout(timer); } flush(); },
+  };
+}
+
+// 深度调研流中「调查轨迹 / 最终结论」的分界标记（与 analyzer.py 的 INVESTIGATE_FINAL_MARK 一致）
+const INVESTIGATE_FINAL_MARK = "\n\n━━━━ 调查结论 ━━━━\n\n";
+
+// 拆分调研流：有标记返回 { trace, final }；无标记（回退普通追问/出错）返回 null
+function splitTrace(text) {
+  const i = text.indexOf(INVESTIGATE_FINAL_MARK);
+  if (i < 0) return null;
+  return {
+    trace: text.slice(0, i).trim(),
+    final: text.slice(i + INVESTIGATE_FINAL_MARK.length),
+  };
+}
+
+// 深度调研的流式渲染：标记前的工具调用轨迹收进可折叠的「调查过程」块（纯文本），
+// 标记后的结论按 Markdown 渲染；流结束仍无标记时整篇按普通回复渲染
+function throttledTraceRenderer(bubble) {
+  let latest = "", timer = null;
+  let details = null, summary = null, pre = null, body = null;
+  const ensure = () => {
+    if (details) return;
+    bubble.textContent = "";
+    bubble.classList.remove("markdown-body");
+    details = document.createElement("details");
+    details.className = "trace-details";
+    summary = document.createElement("summary");
+    summary.textContent = "调查过程";
+    pre = document.createElement("pre");
+    pre.className = "trace-pre";
+    details.append(summary, pre);
+    body = document.createElement("div");
+    bubble.append(details, body);
+  };
+  const paint = () => {
+    const parts = splitTrace(latest);
+    ensure();
+    if (!parts) { pre.textContent = latest.trimStart(); return; }
+    const steps = parts.trace ? parts.trace.split("\n").filter((l) => l.trim()).length : 0;
+    summary.textContent = `调查过程（${steps} 步）`;
+    pre.textContent = parts.trace;
+    renderMarkdown(body, parts.final);
+    if (el.chatLog.contains(bubble)) { el.chatLog.scrollTop = el.chatLog.scrollHeight; }
+  };
+  return {
+    push(text) { latest = text; if (!timer) timer = setTimeout(() => { timer = null; paint(); }, 100); },
+    flush() {
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (splitTrace(latest)) { paint(); return; }
+      renderMarkdown(bubble, latest);
+      if (el.chatLog.contains(bubble)) { el.chatLog.scrollTop = el.chatLog.scrollHeight; }
+    },
   };
 }
 
@@ -1356,9 +1803,17 @@ function fmtShort(iso) {
 function showLogin(msg) {
   if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
   if (state.fetchTimer) { clearInterval(state.fetchTimer); state.fetchTimer = null; }
+  if (state.monitorTimer) { clearInterval(state.monitorTimer); state.monitorTimer = null; }
   state.me = null;
   state.target = null;
   state.targets = [];
+  state.companies = [];
+  state.contacts = [];
+  state.editingContact = null;
+  state.watchList = [];
+  state.watchSet = new Set();
+  updateMonitorBadge(0);
+  showTargetView(); // 复位用户级视图与侧边栏导航高亮
   state.analyzing = false;
   document.body.style.overflow = ""; // 防止抽屉打开时 401 导致背景锁定残留
   el.app.classList.add("hidden");
@@ -1399,13 +1854,21 @@ function enterWorkspace() {
   el.userRole.textContent = user.role === "admin" ? "管理员" : "普通用户";
   el.userRole.className = "role-badge " + (user.role === "admin" ? "admin" : "user");
   el.consoleBtn.classList.toggle("hidden", user.role !== "admin");
-  loadTargets().then(() => {
+  startMonitorPolling(); // 未读角标轮询（60s）
+  // 目标列表与监控清单都就绪后决定落点：有记住的目标 → 恢复该目标；
+  // 否则有任一数据（目标或监控）→ 默认落到客户全景；纯新用户保持空状态
+  Promise.all([loadTargets(), loadWatch(), loadContacts()]).then(() => {
     const saved = localStorage.getItem(targetKey());
     if (saved && state.targets.some((t) => t.target === saved)) {
       selectTarget(saved);
+      return;
     }
+    if (state.targets.length || state.watchSet.size) showUserView("overview");
   });
 }
+
+el.emptyOverviewBtn.addEventListener("click", () => showUserView("overview"));
+el.emptyMonitorBtn.addEventListener("click", () => showUserView("monitor"));
 
 async function doLogin() {
   const username = el.loginUsername.value.trim();
@@ -1714,73 +2177,165 @@ async function loadTargets() {
     el.targetList.innerHTML = "";
     const div = document.createElement("div");
     div.className = "target-empty";
-    div.textContent = "目标列表加载失败：" + e.message;
+    div.textContent = "联系人列表加载失败：" + e.message;
     el.targetList.appendChild(div);
   }
 }
 
 function renderTargets() {
   el.targetList.innerHTML = "";
-  if (!state.targets.length) {
+  // 空状态快捷入口（客户全景/监控中心）：仅有数据（目标或监控）时显示
+  el.emptyQuick.classList.toggle("hidden", !(state.targets.length || state.watchSet.size));
+  if (!state.targets.length && !state.contacts.length) {
     const div = document.createElement("div");
     div.className = "target-empty";
-    div.textContent = "暂无分析过的邮箱";
+    div.textContent = "暂无联系人，点上方「+ 新建」建档";
     el.targetList.appendChild(div);
     return;
   }
   const kw = el.targetSearch.value.trim().toLowerCase();
+  const contactByKey = new Map(state.contacts.map((c) => [c.key, c]));
   const targets = kw
-    ? state.targets.filter((t) => (t.target + " " + (t.name || "")).toLowerCase().includes(kw))
+    ? state.targets.filter((t) => {
+        const c = contactByKey.get(t.target);
+        const hay = [t.target, t.name || "", t.company || "", t.title || "",
+                     c ? (c.name || "") + " " + (c.company || "") + " " + (c.title || "") : ""]
+          .join(" ").toLowerCase();
+        return hay.includes(kw);
+      })
     : state.targets;
   if (!targets.length) {
     const div = document.createElement("div");
     div.className = "target-empty";
-    div.textContent = "没有匹配的目标";
+    div.textContent = "没有匹配的联系人";
     el.targetList.appendChild(div);
     return;
   }
+  // 按企业分组：已建档联系人归其企业，其余归「未分组」排在最后
+  const byGroup = new Map(); // 企业 id（"" = 未分组）-> 该组目标列表
   for (const t of targets) {
-    const item = document.createElement("div");
-    item.className = "target-item" + (t.target === state.target ? " active" : "");
-
-    const row1 = document.createElement("div");
-    row1.className = "row1";
-    if (t.has_session) {
-      const badge = document.createElement("span");
-      badge.className = "sess-badge";
-      badge.textContent = "可追问";
-      row1.appendChild(badge);
-    }
-    const addr = document.createElement("span");
-    addr.className = "addr";
-    addr.textContent = t.name || t.target;
-    addr.title = t.target;
-    row1.appendChild(addr);
-
-    const del = document.createElement("button");
-    del.className = "target-del";
-    del.textContent = "×";
-    del.title = "删除该目标的全部记录";
-    del.addEventListener("click", (e) => { e.stopPropagation(); deleteTarget(t.target); });
-    row1.appendChild(del);
-
-    const row2 = document.createElement("div");
-    row2.className = "row2";
-    row2.textContent =
-      (t.name ? `${t.target} · ` : "") +
-      `${t.email_count} 封邮件 · ${t.sessions} 次会话 · ${fmtShort(t.updated)}`;
-
-    item.appendChild(row1);
-    item.appendChild(row2);
-    item.addEventListener("click", () => selectTarget(t.target));
-    el.targetList.appendChild(item);
+    const c = contactByKey.get(t.target);
+    const gid = c ? (c.company_id || "") : "";
+    if (!byGroup.has(gid)) byGroup.set(gid, []);
+    byGroup.get(gid).push(t);
   }
+  const renderGroup = (group) => {
+    const gid = group ? group.id : "";
+    const items = byGroup.get(gid) || [];
+    if (kw && !items.length) return;      // 搜索时跳过空组
+    if (!group && !items.length) return;  // 没有未分组目标时不显示「未分组」
+    el.targetList.appendChild(buildGroupHead(group, items.length));
+    if (!kw && isGroupCollapsed(gid)) return; // 搜索时忽略折叠状态，直接展示结果
+    for (const t of items) {
+      el.targetList.appendChild(buildTargetItem(t, contactByKey.get(t.target)));
+    }
+  };
+  for (const co of state.companies) renderGroup(co);
+  renderGroup(null); // 「未分组」排在最后
+}
+
+// 分组头：折叠箭头 + 企业名 + 人数；企业组悬停显现改名/删除图标
+function buildGroupHead(group, count) {
+  const gid = group ? group.id : "";
+  const head = document.createElement("div");
+  head.className = "contact-group-head";
+  const arrow = document.createElement("span");
+  arrow.className = "cg-arrow";
+  arrow.textContent = isGroupCollapsed(gid) ? "▸" : "▾";
+  const name = document.createElement("span");
+  name.className = "cg-name";
+  name.textContent = group ? group.name : "未分组";
+  name.title = name.textContent;
+  const cnt = document.createElement("span");
+  cnt.className = "cg-count";
+  cnt.textContent = String(count);
+  head.append(arrow, name, cnt);
+  if (group) {
+    const ren = document.createElement("button");
+    ren.className = "btn-icon cg-op";
+    ren.title = "重命名企业";
+    ren.innerHTML = PENCIL_SVG;
+    ren.addEventListener("click", (e) => { e.stopPropagation(); renameCompany(group); });
+    const del = document.createElement("button");
+    del.className = "btn-icon cg-op";
+    del.title = "删除企业";
+    del.innerHTML = TRASH_SVG;
+    del.addEventListener("click", (e) => { e.stopPropagation(); deleteCompany(group); });
+    head.append(ren, del);
+  }
+  head.addEventListener("click", () => {
+    setGroupCollapsed(gid, !isGroupCollapsed(gid));
+    renderTargets();
+  });
+  return head;
+}
+
+// 单个联系人条目：名称/主地址 + 删除 × + 监控铃铛 +（已建档时）编辑铅笔
+function buildTargetItem(t, contact) {
+  const item = document.createElement("div");
+  item.className = "target-item" + (t.target === state.target ? " active" : "");
+
+  const row1 = document.createElement("div");
+  row1.className = "row1";
+  if (t.has_session) {
+    const badge = document.createElement("span");
+    badge.className = "sess-badge";
+    badge.textContent = "可追问";
+    row1.appendChild(badge);
+  }
+  const addr = document.createElement("span");
+  addr.className = "addr";
+  addr.textContent = (contact && contact.name) || t.name || t.target;
+  addr.title = t.target;
+  row1.appendChild(addr);
+
+  const del = document.createElement("button");
+  del.className = "target-del";
+  del.textContent = "×";
+  del.title = "删除该联系人的全部记录";
+  del.addEventListener("click", (e) => { e.stopPropagation(); deleteTarget(t.target); });
+  row1.appendChild(del);
+
+  // 监控铃铛开关：已监控常显高亮，点击切换监控状态（不触发目标选中）
+  const bell = document.createElement("button");
+  const watched = state.watchSet.has(t.target);
+  bell.className = "monitor-bell" + (watched ? " on" : "");
+  bell.title = watched ? "已监控，点击停止监控" : "监控该联系人：新邮件、承诺与未回复提醒";
+  bell.setAttribute("aria-label", "监控开关");
+  bell.innerHTML = BELL_SVG;
+  bell.addEventListener("click", (e) => { e.stopPropagation(); toggleWatch(t.target); });
+  row1.appendChild(bell);
+
+  // 已建档联系人：悬停显现编辑铅笔，打开联系人对话框
+  if (contact) {
+    const edit = document.createElement("button");
+    edit.className = "target-edit";
+    edit.title = "编辑联系人";
+    edit.setAttribute("aria-label", "编辑联系人");
+    edit.innerHTML = PENCIL_SVG;
+    edit.addEventListener("click", (e) => { e.stopPropagation(); openContactDialog(contact); });
+    row1.appendChild(edit);
+  }
+
+  const title = (contact && contact.title) || t.title || "";
+  const row2 = document.createElement("div");
+  row2.className = "row2";
+  row2.textContent =
+    (title ? `${title} · ` : "") +
+    (contact || t.name ? `${t.target} · ` : "") +
+    `${t.email_count} 封邮件 · ${t.sessions} 次会话` +
+    (t.updated ? ` · ${fmtShort(t.updated)}` : "");
+
+  item.appendChild(row1);
+  item.appendChild(row2);
+  item.addEventListener("click", () => selectTarget(t.target));
+  return item;
 }
 
 // 删除目标：清后端会话/历史/缓存；若删的是当前选中目标则回到空状态
 async function deleteTarget(target) {
   if (!await showDialog({
-    title: "删除目标", danger: true, confirmText: "删除",
+    title: "删除联系人", danger: true, confirmText: "删除",
     body: `确定删除「${target}」的全部记录吗？历史会话、报告与邮件缓存都会被删除，不可恢复。`,
   })) return;
   try {
@@ -1790,6 +2345,7 @@ async function deleteTarget(target) {
     if (state.target === target) {
       state.target = null;
       localStorage.removeItem(targetKey());
+      showTargetView(); // 若正停留在全景/监控中心也一并退出，回到空状态
       el.workspace.classList.add("hidden");
       el.emptyState.classList.remove("hidden");
       el.app.classList.add("no-target");
@@ -1826,6 +2382,7 @@ async function selectTarget(target, opts) {
   el.emptyState.classList.add("hidden");
   el.workspace.classList.remove("hidden");
   el.app.classList.remove("no-target");
+  showTargetView(); // 选中目标 = 离开用户级页面，回到目标工作台
   el.wsTarget.textContent = state.targetName ? `${state.targetName}（${target}）` : target;
   el.wsChips.innerHTML = "";
   renderTargets();
@@ -1876,6 +2433,37 @@ function switchTab(name) {
 el.tabs.forEach((tab) => {
   tab.addEventListener("click", () => switchTab(tab.dataset.tab));
 });
+
+// ---------- 用户级视图（客户全景 / 监控中心，与选中目标无关） ----------
+
+// 进入用户级页面：隐藏目标页签体系（#workspace）与空状态，显示对应 section；已激活时不重复加载
+function showUserView(name) {
+  if (state.userView === name) { closeDrawer(); return; }
+  state.userView = name;
+  el.navOverview.classList.toggle("active", name === "overview");
+  el.navMonitor.classList.toggle("active", name === "monitor");
+  el.workspace.classList.add("hidden");
+  el.emptyState.classList.add("hidden");
+  el.overviewPane.classList.toggle("hidden", name !== "overview");
+  el.monitorPane.classList.toggle("hidden", name !== "monitor");
+  el.wsTarget.textContent = name === "overview" ? "客户全景" : "监控中心";
+  el.wsChips.innerHTML = "";
+  closeDrawer(); // 移动端点导航后收起抽屉
+  if (name === "overview") enterOverviewTab();
+  else enterMonitorTab();
+}
+
+// 回到目标工作台（由 selectTarget/deleteTarget 驱动）：隐藏用户级页面，取消导航高亮
+function showTargetView() {
+  state.userView = null;
+  el.navOverview.classList.remove("active");
+  el.navMonitor.classList.remove("active");
+  el.overviewPane.classList.add("hidden");
+  el.monitorPane.classList.add("hidden");
+}
+
+el.navOverview.addEventListener("click", () => showUserView("overview"));
+el.navMonitor.addEventListener("click", () => showUserView("monitor"));
 
 // ---------- 移动端抽屉 ----------
 
@@ -2049,6 +2637,8 @@ async function openProfile() {
     showError(e.message);
   }
   loadMailSettings();
+  loadNotifySettings();
+  loadStyleNote();
 }
 
 // 邮箱设置：个人覆盖项填在输入框，系统默认显示在占位符；密码不回显
@@ -2111,7 +2701,7 @@ el.profileMask.addEventListener("click", (e) => {
   if (e.target === el.profileMask) closeProfile();
 });
 
-// 统一保存：邮箱设置 + 报告默认提示词 + （三个密码框有内容才提交的）修改密码；
+// 统一保存：邮箱设置 + 推送绑定（企业微信 userid）+ 起草风格说明 + 报告默认提示词 + （三个密码框有内容才提交的）修改密码；
 // 任一环节失败则中断并提示，已成功的环节保留
 el.profileSaveBtn.addEventListener("click", async () => {
   const newPwd = el.profileNewPassword.value;
@@ -2136,6 +2726,18 @@ el.profileSaveBtn.addEventListener("click", async () => {
       }),
     });
     if (!mail.ok) { toast(mail.data.error || "邮箱设置保存失败", true); return; }
+    const notify = await fetchJson("/api/me/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wecom_userid: el.profileWecomUserid.value.trim() }), // 留空表示解绑
+    });
+    if (!notify.ok) { toast(notify.data.error || "推送设置保存失败", true); return; }
+    const style = await fetchJson("/api/me/style-note", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ style_note: el.profileStyleNote.value.trim() }), // 留空表示清除
+    });
+    if (!style.ok) { toast(style.data.error || "起草风格保存失败", true); return; }
     const rp = await fetchJson("/api/report-prompt", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2252,8 +2854,8 @@ function buildMailDataCells(m) {
   const tdSubject = document.createElement("td");
   tdSubject.className = "mail-subject";
   if (m.attachments && m.attachments.length) {
-    tdSubject.textContent = "📎 ";
     tdSubject.title = "附件：" + m.attachments.join("、");
+    tdSubject.appendChild(svgIcon(PAPERCLIP_SVG, "attach-icon"));
   }
   tdSubject.appendChild(document.createTextNode(m.subject));
 
@@ -2386,11 +2988,10 @@ function renderMailCards(list) {
     const subject = document.createElement("div");
     subject.className = "mc-subject";
     if (m.attachments && m.attachments.length) {
-      subject.textContent = "📎 " + m.subject;
       subject.title = "附件：" + m.attachments.join("、");
-    } else {
-      subject.textContent = m.subject;
+      subject.appendChild(svgIcon(PAPERCLIP_SVG, "attach-icon"));
     }
+    subject.appendChild(document.createTextNode(m.subject));
     const peer = document.createElement("div");
     peer.className = "mc-peer";
     peer.textContent = isIn ? m.from_addr : m.to_addrs;
@@ -2712,11 +3313,10 @@ function renderThreadDetail(t) {
       const subject = document.createElement("div");
       subject.className = "mc-subject";
       if (m.attachments && m.attachments.length) {
-        subject.textContent = "📎 " + m.subject;
         subject.title = "附件：" + m.attachments.join("、");
-      } else {
-        subject.textContent = m.subject;
+        subject.appendChild(svgIcon(PAPERCLIP_SVG, "attach-icon"));
       }
+      subject.appendChild(document.createTextNode(m.subject));
       const peer = document.createElement("div");
       peer.className = "mc-peer";
       peer.textContent = isIn ? m.from_addr : m.to_addrs;
@@ -3001,7 +3601,9 @@ async function sendChat() {
   appendMsg("user", message);
   const thinking = appendMsg("assistant",
     state.deepInvestigate ? "正在深度调研（多轮工具调查，耗时较长）…" : "正在思考…");
-  const renderer = throttledRenderer(thinking);
+  const renderer = state.deepInvestigate
+    ? throttledTraceRenderer(thinking)
+    : throttledRenderer(thinking);
   let streamed = false;
   try {
     const url = state.deepInvestigate ? "/api/chat/investigate" : "/api/chat/stream";
@@ -3010,7 +3612,10 @@ async function sendChat() {
       (text) => { streamed = true; renderer.push(text); });
     renderer.flush();
     if (!streamed) thinking.textContent = full || "(空回复)";
-    if (full && full.trim() && isReport) appendSaveReport(thinking, full.trim());
+    // 深度调研的流含工具调用轨迹，存报告只取分界标记后的结论正文
+    const parts = splitTrace(full);
+    const conclusion = (parts ? parts.final : full).trim();
+    if (conclusion && isReport) appendSaveReport(thinking, conclusion);
     loadSessions(); // 首轮问答后后端会生成会话标题，刷新切换器
   } catch (e) {
     renderer.flush();
@@ -3178,14 +3783,13 @@ async function createSession(indices) {
 
 function setAnalyzing(on) {
   state.analyzing = on;
-  el.analyzeBtn.disabled = on;
   el.emptyAnalyzeBtn.disabled = on;
   el.emptyAnalyzeBtn.textContent = on ? "正在抓取邮件…" : "开始分析";
   el.progress.classList.toggle("hidden", !on);
 }
 
 async function startAnalyze(emailOverride) {
-  const email = (emailOverride || el.emailInput.value).trim();
+  const email = (emailOverride || "").trim();
   if (!email) { showError("请输入邮箱地址"); return; }
   if (state.analyzing) return;
   showError("");
@@ -3258,7 +3862,8 @@ function finishWithError(msg) {
   showError(msg);
 }
 
-el.analyzeBtn.addEventListener("click", () => startAnalyze());
+// 列表头「+ 新建」：打开联系人建档对话框；直接发起分析走空状态等既有入口
+el.contactNewBtn.addEventListener("click", () => openContactDialog());
 el.analyzeCancel.addEventListener("click", async () => {
   const jobId = state.analyzeJobId;
   if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
@@ -3267,16 +3872,11 @@ el.analyzeCancel.addEventListener("click", async () => {
   toast("已取消，抓取结果将被丢弃");
   if (jobId) { try { await fetchJson("/api/jobs/" + jobId + "/cancel", { method: "POST" }); } catch (e) { /* 忽略 */ } }
 });
-el.emailInput.addEventListener("keydown", (e) => { if (e.key === "Enter") startAnalyze(); });
 el.emptyAnalyzeBtn.addEventListener("click", () => {
-  el.emailInput.value = el.emptyEmailInput.value;
   startAnalyze(el.emptyEmailInput.value);
 });
 el.emptyEmailInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    el.emailInput.value = el.emptyEmailInput.value;
-    startAnalyze(el.emptyEmailInput.value);
-  }
+  if (e.key === "Enter") startAnalyze(el.emptyEmailInput.value);
 });
 // 会话失效（超时/服务重启）但本地有缓存邮件时，一键恢复活跃会话（含历史问答，不新建会话块）
 el.chatResumeBtn.addEventListener("click", async () => {
@@ -3299,7 +3899,7 @@ el.chatResumeBtn.addEventListener("click", async () => {
     el.chatResumeBtn.disabled = false;
   }
 });
-el.refreshTargets.addEventListener("click", loadTargets);
+el.refreshTargets.addEventListener("click", () => { loadTargets(); loadContacts(); });
 el.targetSearch.addEventListener("input", renderTargets);
 // 「更多」下拉：点击切换，点击页面其他位置或菜单项后收起
 el.moreBtn.addEventListener("click", (e) => {
@@ -3316,7 +3916,6 @@ el.reanalyzeBtn.addEventListener("click", async () => {
   if (!state.target) return;
   if (state.hasSession &&
       !await showDialog({ title: "重新抓取并分析", body: `将重新抓取与 ${state.target} 的往来邮件，并清空当前对话上下文。继续吗？`, confirmText: "继续" })) return;
-  el.emailInput.value = state.target;
   startAnalyze(state.target);
 });
 
@@ -3391,13 +3990,988 @@ el.exportBtn.addEventListener("click", async () => {
   }
 });
 
+// ---------- 邮件监控（监控开关 / 承诺台账 / 事件通知 / 推送绑定） ----------
+
+const BELL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
+
+// 附件回形针（单色 currentColor）
+const PAPERCLIP_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
+
+// 用固定常量 SVG 构建图标元素（markup 只传本文件内常量，不拼用户数据）
+function svgIcon(markup, cls) {
+  const span = document.createElement("span");
+  if (cls) span.className = cls;
+  span.innerHTML = markup;
+  return span;
+}
+
+// 监控清单：进入工作台时一次性拉取，之后本地维护（增删后同步更新）
+async function loadWatch() {
+  try {
+    const { ok, data } = await fetchJson("/api/monitor/watch");
+    if (!ok) return;
+    state.watchList = data.watch || [];
+    state.watchSet = new Set(state.watchList.map((w) => w.target));
+    renderTargets();              // 刷新侧边栏铃铛状态
+    renderCommitTargetOptions();  // 刷新台账的联系人筛选
+    refreshMonitorEmptyHint();    // 监控清单为空时显示引导提示条
+  } catch (e) { /* 监控清单失败不阻塞主流程 */ }
+}
+
+// 监控中心顶部引导提示条：未开启任何监控时显示
+function refreshMonitorEmptyHint() {
+  el.monitorEmptyHint.classList.toggle("hidden", state.watchSet.size > 0);
+}
+
+// 侧边栏铃铛开关：未监控 → 添加（默认 2 天未回复提醒）；已监控 → 删除
+async function toggleWatch(target) {
+  const watched = state.watchSet.has(target);
+  try {
+    if (watched) {
+      const { ok, data } = await fetchJson(
+        "/api/monitor/watch/" + encodeURIComponent(target), { method: "DELETE" });
+      if (!ok) { toast(data.error || "停止监控失败", true); return; }
+      state.watchSet.delete(target);
+      state.watchList = state.watchList.filter((w) => w.target !== target);
+      toast("已停止监控 " + target);
+    } else {
+      const { ok, data } = await fetchJson("/api/monitor/watch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target, unreplied_days: 2 }),
+      });
+      if (!ok) { toast(data.error || "添加监控失败", true); return; }
+      state.watchSet.add(target);
+      state.watchList.push({ target, unreplied_days: 2, created: "", last_check: "" });
+      state.watchList.sort((a, b) => a.target.localeCompare(b.target));
+      toast("已开始监控 " + target);
+    }
+    renderTargets();
+    renderCommitTargetOptions();
+    refreshMonitorEmptyHint();
+  } catch (e) { toast(e.message, true); }
+}
+
+// 「监控中心」导航项的未读角标：>0 显示，进入事件通知标记已读后清除
+function updateMonitorBadge(n) {
+  state.monitorUnread = n;
+  el.monitorNavBadge.classList.toggle("hidden", !(n > 0));
+  el.monitorNavBadge.textContent = n > 99 ? "99+" : String(n);
+}
+
+function startMonitorPolling() {
+  if (state.monitorTimer) clearInterval(state.monitorTimer);
+  pollMonitorUnread();
+  state.monitorTimer = setInterval(pollMonitorUnread, 60000);
+}
+
+async function pollMonitorUnread() {
+  try {
+    const { ok, data } = await fetchJson("/api/monitor/events");
+    if (!ok) return;
+    updateMonitorBadge(data.unread || 0);
+    // 正停留在监控中心的事件通知子标签时同步刷新列表
+    if (state.userView === "monitor" && state.monitorSub === "events") {
+      renderEvents(data.events || []);
+    }
+  } catch (e) { /* 轮询失败静默，下轮重试 */ }
+}
+
+// 进入监控中心：按当前子标签加载数据
+function enterMonitorTab() {
+  renderCommitTargetOptions();
+  if (state.monitorSub === "events") enterEventsPane();
+  else loadCommitments();
+}
+
+// 监控页内「承诺台账 / 事件通知」子页签
+el.monitorSubtabs.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    state.monitorSub = btn.dataset.monitorSub;
+    el.monitorSubtabs.forEach((b) => b.classList.toggle("active", b === btn));
+    const isCommit = state.monitorSub === "commitments";
+    el.monitorCommitmentsPane.classList.toggle("hidden", !isCommit);
+    el.monitorEventsPane.classList.toggle("hidden", isCommit);
+    if (isCommit) loadCommitments();
+    else enterEventsPane();
+  });
+});
+
+// ---------- 承诺台账 ----------
+
+const COMMIT_STATUS_LABEL = { open: "进行中", done: "已完成", dismissed: "已忽略" };
+const COMMIT_STATUS_BADGE = { open: "in", done: "out", dismissed: "dismissed" };
+const COMMIT_OWNER_LABEL = { me: "我", them: "对方" };
+
+// 联系人筛选的选项来自监控清单，尽量保留当前选中项
+function renderCommitTargetOptions() {
+  const sel = el.commitTarget;
+  const current = sel.value;
+  sel.innerHTML = "";
+  const all = document.createElement("option");
+  all.value = "";
+  all.textContent = "全部联系人";
+  sel.appendChild(all);
+  for (const w of state.watchList) {
+    const opt = document.createElement("option");
+    opt.value = w.target;
+    opt.textContent = w.target;
+    sel.appendChild(opt);
+  }
+  sel.value = [...sel.options].some((o) => o.value === current) ? current : "";
+}
+
+async function loadCommitments() {
+  const params = new URLSearchParams();
+  if (el.commitStatus.value) params.set("status", el.commitStatus.value);
+  if (el.commitTarget.value) params.set("target", el.commitTarget.value);
+  const url = "/api/monitor/commitments" + (params.toString() ? "?" + params.toString() : "");
+  try {
+    const { ok, data } = await fetchJson(url);
+    if (!ok) { showError(data.error || "承诺台账加载失败"); return; }
+    renderCommitments(data.commitments || []);
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+el.commitStatus.addEventListener("change", loadCommitments);
+el.commitTarget.addEventListener("change", loadCommitments);
+
+function todayStr() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+function renderCommitments(list) {
+  const wrap = el.commitTableWrap;
+  wrap.innerHTML = "";
+  if (!list.length) {
+    const div = document.createElement("div");
+    div.className = "pane-empty";
+    div.textContent = state.watchSet.size
+      ? "暂无符合条件的承诺记录"
+      : "暂无监控联系人。先在左侧联系人列表点击铃铛开启监控，后台轮询时会从往来邮件中收割承诺。";
+    wrap.appendChild(div);
+    return;
+  }
+  const today = todayStr();
+  const table = document.createElement("table");
+  table.className = "mail-table commit-table";
+  table.innerHTML = "<thead><tr><th>状态</th><th>联系人</th><th>责任方</th><th>内容</th><th>截止</th><th>来源邮件主题</th><th>创建时间</th><th>操作</th></tr></thead>";
+  const tbody = document.createElement("tbody");
+  for (const c of list) {
+    const tr = document.createElement("tr");
+
+    const tdStatus = document.createElement("td");
+    const badge = document.createElement("span");
+    badge.className = "badge " + (COMMIT_STATUS_BADGE[c.status] || "dismissed");
+    badge.textContent = COMMIT_STATUS_LABEL[c.status] || c.status;
+    tdStatus.appendChild(badge);
+
+    const tdTarget = document.createElement("td");
+    tdTarget.className = "mail-peer";
+    tdTarget.textContent = c.target;
+    tdTarget.title = c.target;
+
+    const tdOwner = document.createElement("td");
+    tdOwner.textContent = COMMIT_OWNER_LABEL[c.owner] || "—";
+
+    const tdText = document.createElement("td");
+    tdText.className = "commit-text";
+    tdText.textContent = c.text;
+    tdText.title = c.text;
+
+    // 截止：进行中条目到期（=今天）与逾期（<今天）用醒目颜色标出
+    const tdDue = document.createElement("td");
+    if (c.due) {
+      tdDue.textContent = c.due;
+      tdDue.style.whiteSpace = "nowrap";
+      if (c.status === "open" && c.due <= today) {
+        tdDue.textContent += c.due === today ? "（今天到期）" : "（已逾期）";
+        tdDue.className = c.due === today ? "due-today" : "due-overdue";
+      }
+    } else {
+      tdDue.textContent = "—";
+      tdDue.style.color = "var(--text-3)";
+    }
+
+    const tdSrc = document.createElement("td");
+    tdSrc.className = "commit-src";
+    tdSrc.textContent = c.source_subject || "—";
+    tdSrc.title = c.source_subject || "";
+
+    const tdCreated = document.createElement("td");
+    tdCreated.className = "mail-date";
+    tdCreated.textContent = fmtShort(c.created);
+
+    const tdOps = document.createElement("td");
+    tdOps.style.whiteSpace = "nowrap";
+    if (c.status === "open") {
+      const btnDone = document.createElement("button");
+      btnDone.className = "link-btn";
+      btnDone.textContent = "完成";
+      btnDone.addEventListener("click", () => updateCommitment(c.id, { status: "done" }, "已标记完成"));
+      const btnDismiss = document.createElement("button");
+      btnDismiss.className = "link-btn danger";
+      btnDismiss.textContent = "忽略";
+      btnDismiss.addEventListener("click", () => updateCommitment(c.id, { status: "dismissed" }, "已忽略"));
+      tdOps.append(btnDone, btnDismiss);
+    } else {
+      const btnReopen = document.createElement("button");
+      btnReopen.className = "link-btn";
+      btnReopen.textContent = "重开";
+      btnReopen.addEventListener("click", () => updateCommitment(c.id, { status: "open" }, "已重开"));
+      tdOps.appendChild(btnReopen);
+    }
+
+    tr.append(tdStatus, tdTarget, tdOwner, tdText, tdDue, tdSrc, tdCreated, tdOps);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+}
+
+async function updateCommitment(id, fields, okMsg) {
+  try {
+    const { ok, data } = await fetchJson(
+      "/api/monitor/commitments/" + encodeURIComponent(id), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fields),
+      });
+    if (!ok) { toast(data.error || "操作失败", true); return; }
+    toast(okMsg || "已更新");
+    loadCommitments();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---------- 事件通知 ----------
+
+const EVENT_KIND_MAP = {
+  new_mail: ["新邮件", "in"],
+  unreplied: ["未回复提醒", "warn"],
+  commitment: ["承诺到期", "out"],
+  sentiment: ["语气预警", "alert"],
+  digest: ["每日简报", "out"],
+};
+
+// 进入事件通知子标签：先全部标记已读（清角标），再刷新列表
+async function enterEventsPane() {
+  try {
+    await fetchJson("/api/monitor/events/read", { method: "POST" });
+  } catch (e) { /* 标记失败不阻塞列表展示 */ }
+  loadEvents();
+}
+
+async function loadEvents() {
+  try {
+    const { ok, data } = await fetchJson("/api/monitor/events");
+    if (!ok) { showError(data.error || "事件加载失败"); return; }
+    updateMonitorBadge(data.unread || 0);
+    renderEvents(data.events || []);
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+function renderEvents(list) {
+  const wrap = el.eventList;
+  wrap.innerHTML = "";
+  if (!list.length) {
+    const div = document.createElement("div");
+    div.className = "pane-empty";
+    div.textContent = "暂无事件。添加监控联系人后，后台轮询发现的新邮件、提醒与预警会记录在这里。";
+    wrap.appendChild(div);
+    return;
+  }
+  for (const ev of list) {
+    const item = document.createElement("div");
+    item.className = "event-item" + (ev.read ? "" : " unread");
+
+    const head = document.createElement("div");
+    head.className = "event-head";
+    const [label, badgeCls] = EVENT_KIND_MAP[ev.kind] || [ev.kind, "dismissed"];
+    const badge = document.createElement("span");
+    badge.className = "badge " + badgeCls;
+    badge.textContent = label;
+    const title = document.createElement("span");
+    title.className = "event-title";
+    title.textContent = ev.title || "";
+    head.append(badge, title);
+    if (ev.target) {
+      const target = document.createElement("span");
+      target.className = "event-target";
+      target.textContent = ev.target;
+      head.appendChild(target);
+    }
+    const time = document.createElement("span");
+    time.className = "event-time";
+    time.textContent = fmtShort(ev.time);
+    head.appendChild(time);
+    item.appendChild(head);
+
+    if (ev.content) {
+      // content 为 markdown 风格纯文本，按 pre-wrap 原样展示（不渲染 markdown）
+      const content = document.createElement("div");
+      content.className = "event-content";
+      content.textContent = ev.content;
+      item.appendChild(content);
+    }
+    wrap.appendChild(item);
+  }
+}
+
+// ---------- 个人中心：推送绑定（消息推送区块）与起草风格说明 ----------
+
+async function loadNotifySettings() {
+  try {
+    const { ok, data } = await fetchJson("/api/me/notify");
+    if (!ok) { showError(data.error || "推送设置加载失败"); return; }
+    el.profileWecomUserid.value = data.wecom_userid || "";
+    el.profileWecomUnconfigured.classList.toggle("hidden", !!data.wecom_configured);
+    el.profileWecomTestBtn.classList.toggle("hidden", !data.wecom_configured);
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+// 起草风格说明：打开个人中心时回填（仅 DOM 回填，无本地缓存状态需要清理）
+async function loadStyleNote() {
+  try {
+    const { ok, data } = await fetchJson("/api/me/style-note");
+    if (!ok) { showError(data.error || "起草风格加载失败"); return; }
+    el.profileStyleNote.value = data.style_note || "";
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+// 测试推送：先用当前输入保存绑定，再发测试消息，避免测的是旧绑定
+el.profileWecomTestBtn.addEventListener("click", async () => {
+  el.profileWecomTestBtn.disabled = true;
+  el.profileWecomTestBtn.textContent = "推送中…";
+  try {
+    const save = await fetchJson("/api/me/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wecom_userid: el.profileWecomUserid.value.trim() }),
+    });
+    if (!save.ok) { toast(save.data.error || "推送设置保存失败", true); return; }
+    const { ok, data } = await fetchJson("/api/me/notify/test", { method: "POST" });
+    toast(ok ? "测试推送已发送，请查收企业微信" : (data.error || "推送失败"), !ok);
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    el.profileWecomTestBtn.disabled = false;
+    el.profileWecomTestBtn.textContent = "测试推送";
+  }
+});
+
+// ---------- 通讯簿（企业分组 / 联系人建档） ----------
+
+// 编辑铅笔 / 垃圾桶（单色 currentColor，与 report-del 同款垃圾桶）
+const PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
+const TRASH_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+const CONTACT_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CONTACT_MAX_ADDR = 10;
+
+// 通讯簿数据：进入工作台时拉取；失败不阻塞主流程（侧边栏退化为平铺）
+async function loadContacts() {
+  try {
+    const { ok, data } = await fetchJson("/api/contacts");
+    if (!ok) return;
+    state.companies = data.companies || [];
+    state.contacts = data.contacts || [];
+    renderTargets();
+  } catch (e) { /* 通讯簿加载失败不阻塞主流程 */ }
+}
+
+// 分组折叠状态按用户持久化（key: 企业 id，"" = 未分组）
+function contactGroupKey() {
+  return "zemail:contactGroups:" + (state.me ? state.me.username : "");
+}
+function readGroupCollapsed() {
+  try { return JSON.parse(localStorage.getItem(contactGroupKey())) || {}; }
+  catch (e) { return {}; }
+}
+function isGroupCollapsed(gid) {
+  return !!readGroupCollapsed()[gid || ""];
+}
+function setGroupCollapsed(gid, collapsed) {
+  const map = readGroupCollapsed();
+  map[gid || ""] = collapsed;
+  try { localStorage.setItem(contactGroupKey(), JSON.stringify(map)); } catch (e) { /* 忽略 */ }
+}
+
+async function renameCompany(company) {
+  const name = await showDialog({
+    title: "重命名企业", confirmText: "保存",
+    body: `将企业「${company.name}」重命名为：`,
+    input: { type: "text", placeholder: company.name },
+  });
+  if (name === null) return;
+  const trimmed = name.trim();
+  if (!trimmed || trimmed === company.name) return;
+  try {
+    const { ok, data } = await fetchJson("/api/companies/" + encodeURIComponent(company.id), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    if (!ok) { toast(data.error || "重命名失败", true); return; }
+    toast("已重命名为「" + trimmed + "」");
+    await Promise.all([loadContacts(), loadTargets()]);
+  } catch (e) { toast(e.message, true); }
+}
+
+async function deleteCompany(company) {
+  if (!await showDialog({
+    title: "删除企业", danger: true, confirmText: "删除",
+    body: `确定删除企业「${company.name}」吗？删除企业不会删除任何联系人；企业下还有联系人时需先将其移出或删除。`,
+  })) return;
+  try {
+    const { ok, data } = await fetchJson("/api/companies/" + encodeURIComponent(company.id), { method: "DELETE" });
+    if (!ok) { toast(data.error || "删除失败", true); return; }
+    toast("已删除企业「" + company.name + "」");
+    await Promise.all([loadContacts(), loadTargets()]);
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---------- 联系人管理对话框 ----------
+
+function showContactError(msg) {
+  el.contactError.textContent = msg;
+  el.contactError.classList.remove("hidden");
+}
+
+// 企业下拉：（未分组）+ 全部企业 + 「新建企业…」；selected 为当前选中的企业 id
+function renderCompanyOptions(selected) {
+  const sel = el.contactCompany;
+  sel.innerHTML = "";
+  const opts = [["", "（未分组）"]];
+  for (const co of state.companies) opts.push([co.id, co.name]);
+  opts.push(["__new__", "新建企业…"]);
+  for (const [val, label] of opts) {
+    const o = document.createElement("option");
+    o.value = val;
+    o.textContent = label;
+    sel.appendChild(o);
+  }
+  sel.value = selected || "";
+  if (sel.value !== (selected || "")) sel.value = ""; // 原企业可能已被删除
+  el.contactCompanyNewWrap.classList.add("hidden");
+}
+
+// 追加一行邮箱地址；isPrimary = 主地址行（带「主地址 · 分析键」标签，无删除钮）
+function addAddrRow(value, isPrimary, disabled) {
+  const row = document.createElement("div");
+  row.className = "contact-addr-row";
+  const input = document.createElement("input");
+  input.type = "email";
+  input.value = value || "";
+  input.placeholder = isPrimary ? "主地址（分析键）" : "其他邮箱地址";
+  input.autocomplete = "off";
+  row.appendChild(input);
+  if (isPrimary) {
+    const tag = document.createElement("span");
+    tag.className = "contact-addr-tag";
+    tag.textContent = "主地址 · 分析键";
+    row.appendChild(tag);
+  }
+  if (disabled) {
+    input.disabled = true;
+    input.title = "主地址不可修改（分析数据与之关联）";
+  } else if (!isPrimary) {
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.className = "btn-icon";
+    rm.title = "移除该地址";
+    rm.textContent = "✕";
+    rm.addEventListener("click", () => row.remove());
+    row.appendChild(rm);
+  }
+  el.contactAddrList.appendChild(row);
+  return input;
+}
+
+// 打开联系人对话框：contact 为 null 时新建（单个空地址行）
+function openContactDialog(contact) {
+  state.editingContact = contact || null;
+  el.contactModalTitle.textContent = contact ? "编辑联系人" : "添加联系人";
+  el.contactError.classList.add("hidden");
+  el.contactName.value = contact ? contact.name || "" : "";
+  el.contactTitle.value = contact ? contact.title || "" : "";
+  el.contactNote.value = contact ? contact.note || "" : "";
+  el.contactCompanyNew.value = "";
+  renderCompanyOptions(contact ? contact.company_id || "" : "");
+  el.contactAddrList.innerHTML = "";
+  const addrs = contact ? (contact.addresses || [contact.key]).slice() : [""];
+  addrs.forEach((a, i) => addAddrRow(a, i === 0, !!contact && i === 0));
+  el.contactDeleteBtn.classList.toggle("hidden", !contact);
+  el.contactSaveBtn.disabled = false;
+  el.contactSaveBtn.textContent = "保存";
+  el.contactModalMask.classList.remove("hidden");
+  el.contactName.focus();
+}
+
+function closeContactModal() {
+  el.contactModalMask.classList.add("hidden");
+  state.editingContact = null;
+}
+
+// 保存：前端逐项校验格式（非法行标红），「新建企业…」先建企业再保存联系人
+el.contactSaveBtn.addEventListener("click", async () => {
+  const editing = state.editingContact;
+  el.contactError.classList.add("hidden");
+  const name = el.contactName.value.trim();
+  if (!name) { showContactError("请填写姓名"); el.contactName.focus(); return; }
+  const rows = [...el.contactAddrList.querySelectorAll(".contact-addr-row")];
+  const addresses = [];
+  let err = "";
+  rows.forEach((row, i) => {
+    const input = row.querySelector("input");
+    const v = input.value.trim();
+    input.classList.remove("invalid");
+    if (!v) {
+      if (i === 0) { input.classList.add("invalid"); err = err || "请填写主地址（分析键）"; }
+      return; // 非首行留空视为删除该地址
+    }
+    if (!CONTACT_EMAIL_RE.test(v)) {
+      input.classList.add("invalid");
+      err = err || "邮箱地址格式不正确：" + v;
+      return;
+    }
+    if (addresses.some((a) => a.toLowerCase() === v.toLowerCase())) {
+      input.classList.add("invalid");
+      err = err || "邮箱地址重复：" + v;
+      return;
+    }
+    addresses.push(v);
+  });
+  if (err) { showContactError(err); return; }
+  if (addresses.length > CONTACT_MAX_ADDR) {
+    showContactError("最多 " + CONTACT_MAX_ADDR + " 个邮箱地址");
+    return;
+  }
+
+  el.contactSaveBtn.disabled = true;
+  el.contactSaveBtn.textContent = "保存中…";
+  try {
+    let companyId = el.contactCompany.value;
+    if (companyId === "__new__") {
+      const newName = el.contactCompanyNew.value.trim();
+      if (!newName) { showContactError("请填写新企业名称"); el.contactCompanyNew.focus(); return; }
+      const { ok, data } = await fetchJson("/api/companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName }),
+      });
+      if (!ok) { showContactError(data.error || "新建企业失败"); return; }
+      companyId = data.company.id;
+      await loadContacts(); // 让企业分组立即反映新企业
+    }
+    const payload = {
+      name,
+      addresses,
+      company_id: companyId,
+      title: el.contactTitle.value.trim(),
+      note: el.contactNote.value.trim(),
+    };
+    const url = editing
+      ? "/api/contacts/" + encodeURIComponent(editing.id)
+      : "/api/contacts";
+    const { ok, data } = await fetchJson(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!ok) { showContactError(data.error || "保存失败"); return; }
+    closeContactModal();
+    toast(editing ? "已保存联系人" : "已添加联系人");
+    await Promise.all([loadContacts(), loadTargets()]);
+  } catch (e) {
+    showContactError(e.message);
+  } finally {
+    el.contactSaveBtn.disabled = false;
+    el.contactSaveBtn.textContent = "保存";
+  }
+});
+
+// 删除联系人：仅删通讯簿建档，邮件与分析数据保留，该联系人回到「未分组」
+el.contactDeleteBtn.addEventListener("click", async () => {
+  const editing = state.editingContact;
+  if (!editing) return;
+  if (!await showDialog({
+    title: "删除联系人", danger: true, confirmText: "删除",
+    body: `确定从通讯簿删除「${editing.name || editing.key}」吗？仅删除建档信息，不会删除邮件与分析数据；若该联系人已有分析记录，删除建档后会回到「未分组」。`,
+  })) return;
+  try {
+    const { ok, data } = await fetchJson("/api/contacts/" + encodeURIComponent(editing.id), { method: "DELETE" });
+    if (!ok) { toast(data.error || "删除失败", true); return; }
+    closeContactModal();
+    toast("已删除联系人建档");
+    await Promise.all([loadContacts(), loadTargets()]);
+  } catch (e) { toast(e.message, true); }
+});
+
+el.contactModalClose.addEventListener("click", closeContactModal);
+el.contactCancelBtn.addEventListener("click", closeContactModal);
+el.contactModalMask.addEventListener("click", (e) => {
+  if (e.target === el.contactModalMask) closeContactModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !el.contactModalMask.classList.contains("hidden")) closeContactModal();
+});
+el.contactAddrAdd.addEventListener("click", () => {
+  if (el.contactAddrList.querySelectorAll(".contact-addr-row").length >= CONTACT_MAX_ADDR) {
+    showContactError("最多 " + CONTACT_MAX_ADDR + " 个邮箱地址");
+    return;
+  }
+  el.contactError.classList.add("hidden");
+  addAddrRow("", false, false).focus();
+});
+el.contactCompany.addEventListener("change", () => {
+  const isNew = el.contactCompany.value === "__new__";
+  el.contactCompanyNewWrap.classList.toggle("hidden", !isNew);
+  if (isNew) el.contactCompanyNew.focus();
+});
+
+// ---------- 客户全景 ----------
+
+const RISK_MAP = {
+  high: ["高风险", "alert"],
+  mid: ["需关注", "warn"],
+  ok: ["健康", "out"],
+};
+
+// 进入客户全景才加载（懒加载，不自动轮询）；响应有 60 秒服务端缓存
+function enterOverviewTab() {
+  loadOverview(false);
+}
+
+async function loadOverview(refresh) {
+  const wrap = el.overviewTableWrap;
+  wrap.innerHTML = '<div class="pane-empty">加载中…</div>';
+  el.overviewCount.textContent = "";
+  try {
+    const { ok, data } = await fetchJson("/api/overview" + (refresh ? "?refresh=1" : ""));
+    if (!ok) {
+      wrap.innerHTML = "";
+      showError(data.error || "全景数据加载失败");
+      return;
+    }
+    renderOverview(data.contacts || [], data.generated_at);
+  } catch (e) {
+    wrap.innerHTML = "";
+    showError(e.message);
+  }
+}
+
+el.overviewRefreshBtn.addEventListener("click", async () => {
+  el.overviewRefreshBtn.disabled = true;
+  el.overviewRefreshBtn.textContent = "刷新中…";
+  try {
+    await loadOverview(true); // ?refresh=1 强制重算
+  } finally {
+    el.overviewRefreshBtn.disabled = false;
+    el.overviewRefreshBtn.textContent = "刷新";
+  }
+});
+
+// 「今日待办」chips：从已加载的 contacts 前端统计，N>0 才显示，全为 0 显示绿色「今日无待办」
+function renderTodoChips(contacts) {
+  const wrap = el.overviewTodos;
+  wrap.innerHTML = "";
+  if (!contacts.length) { wrap.classList.add("hidden"); return; }
+  wrap.classList.remove("hidden");
+  const unreplied = contacts.filter((c) => c.unreplied).length;
+  const overdue = contacts.reduce((sum, c) => sum + (c.overdue_commitments || 0), 0);
+  const sentiment = contacts.filter((c) => c.sentiment_worsening).length;
+  const high = contacts.filter((c) => c.risk === "high").length;
+  if (!unreplied && !overdue && !sentiment && !high) {
+    const chip = document.createElement("span");
+    chip.className = "badge out";
+    chip.textContent = "今日无待办";
+    wrap.appendChild(chip);
+    return;
+  }
+  const items = [
+    [`未回复 ${unreplied}`, "alert", unreplied],
+    [`逾期承诺 ${overdue}`, "alert", overdue],
+    [`语气预警 ${sentiment}`, "warn", sentiment],
+    [`高风险 ${high}`, "alert", high],
+  ];
+  for (const [label, cls, n] of items) {
+    if (!n) continue;
+    const chip = document.createElement("span");
+    chip.className = "badge " + cls;
+    chip.textContent = label;
+    wrap.appendChild(chip);
+  }
+}
+
+function dateOnly(iso) { return String(iso || "").slice(0, 10); }
+
+function renderOverview(contacts, generatedAt) {
+  const wrap = el.overviewTableWrap;
+  wrap.innerHTML = "";
+  renderTodoChips(contacts);
+  el.overviewCount.textContent = contacts.length
+    ? `共 ${contacts.length} 位联系人 · 更新于 ${fmtShort(generatedAt)}（60 秒内重复打开走缓存，点「刷新」强制重算）`
+    : "";
+  if (!contacts.length) {
+    wrap.innerHTML = '<div class="pane-empty">暂无数据，先发起一次分析</div>';
+    return;
+  }
+  const table = document.createElement("table");
+  table.className = "mail-table overview-table";
+  table.innerHTML = "<thead><tr><th>健康度</th><th>联系人</th><th>最近往来</th><th>状态</th><th>近30天</th><th>平均回复</th><th>未闭环承诺</th><th></th></tr></thead>";
+  const tbody = document.createElement("tbody");
+  for (const c of contacts) {
+    const tr = document.createElement("tr");
+    tr.title = "单击展开评分依据，双击打开该联系人";
+
+    // 健康度：分数 + 风险徽章
+    const tdHealth = document.createElement("td");
+    tdHealth.style.whiteSpace = "nowrap";
+    const score = document.createElement("span");
+    score.className = "health-score";
+    score.textContent = c.health;
+    const [riskLabel, riskCls] = RISK_MAP[c.risk] || [c.risk, "dismissed"];
+    const riskBadge = document.createElement("span");
+    riskBadge.className = "badge " + riskCls;
+    riskBadge.textContent = riskLabel;
+    tdHealth.append(score, riskBadge);
+
+    const tdName = document.createElement("td");
+    tdName.className = "mail-peer";
+    tdName.textContent = c.name || c.target;
+    tdName.title = c.target;
+
+    // 最近往来：日期 + N 天前
+    const tdLast = document.createElement("td");
+    tdLast.className = "mail-date";
+    const daysText = c.days_since_last === 0 ? "今天" : `${c.days_since_last} 天前`;
+    tdLast.textContent = `${dateOnly(c.last_date)} · ${daysText}`;
+
+    // 状态图标列：未回复 / 逾期承诺 / 语气恶化
+    const tdStatus = document.createElement("td");
+    const statusBox = document.createElement("div");
+    statusBox.className = "overview-status";
+    if (c.unreplied) {
+      const b = document.createElement("span");
+      b.className = "badge alert";
+      b.textContent = "未回复";
+      statusBox.appendChild(b);
+    }
+    if (c.overdue_commitments > 0) {
+      const b = document.createElement("span");
+      b.className = "badge alert";
+      b.textContent = `逾期承诺 x${c.overdue_commitments}`;
+      statusBox.appendChild(b);
+    }
+    if (c.sentiment_worsening) {
+      const b = document.createElement("span");
+      b.className = "badge warn";
+      b.textContent = "语气恶化";
+      statusBox.appendChild(b);
+    }
+    if (c.data_limited) {
+      const b = document.createElement("span");
+      b.className = "badge warn";
+      b.textContent = "数据不足";
+      statusBox.appendChild(b);
+    }
+    if (!statusBox.children.length) {
+      statusBox.textContent = "—";
+      statusBox.style.color = "var(--text-3)";
+    }
+    tdStatus.appendChild(statusBox);
+
+    const tdFreq = document.createElement("td");
+    tdFreq.textContent = `${c.freq_last_30d} 封`;
+
+    const tdReply = document.createElement("td");
+    tdReply.style.whiteSpace = "nowrap";
+    tdReply.textContent = c.reply_hours_avg === null || c.reply_hours_avg === undefined
+      ? "—" : `${Number(c.reply_hours_avg).toFixed(1)} 小时`;
+    if (tdReply.textContent === "—") tdReply.style.color = "var(--text-3)";
+
+    const tdOpen = document.createElement("td");
+    tdOpen.textContent = c.open_commitments;
+
+    const tdOpen2 = document.createElement("td");
+    tdOpen2.style.whiteSpace = "nowrap";
+    const btnOpen = document.createElement("button");
+    btnOpen.className = "link-btn";
+    btnOpen.textContent = "打开";
+    btnOpen.title = "在工作台中打开该联系人";
+    btnOpen.addEventListener("click", (e) => { e.stopPropagation(); openOverviewTarget(c.target); });
+    tdOpen2.appendChild(btnOpen);
+
+    tr.append(tdHealth, tdName, tdLast, tdStatus, tdFreq, tdReply, tdOpen, tdOpen2);
+
+    // 展开行：评分依据 + 往来跨度
+    const trDetail = document.createElement("tr");
+    trDetail.className = "overview-detail hidden";
+    const tdDetail = document.createElement("td");
+    tdDetail.colSpan = 8;
+    const detailTitle = document.createElement("div");
+    detailTitle.className = "overview-detail-title";
+    detailTitle.textContent = "评分依据";
+    tdDetail.appendChild(detailTitle);
+    const reasons = c.risk_reasons || [];
+    if (reasons.length) {
+      const ul = document.createElement("ul");
+      ul.className = "overview-reasons";
+      for (const r of reasons) {
+        const li = document.createElement("li");
+        li.textContent = r;
+        ul.appendChild(li);
+      }
+      tdDetail.appendChild(ul);
+    } else {
+      const none = document.createElement("div");
+      none.className = "overview-span";
+      none.style.marginTop = "0";
+      none.textContent = "暂无风险项";
+      tdDetail.appendChild(none);
+    }
+    // 信息卡覆盖率小字；数据不足时注明信号未完整纳入
+    const coverage = document.createElement("div");
+    coverage.className = "overview-span";
+    coverage.textContent = `信息卡覆盖率：${Math.round((c.card_coverage || 0) * 100)}%` +
+      (c.data_limited ? "——语气与承诺信号未完整纳入，建议先对该客户运行一次分析" : "");
+    tdDetail.appendChild(coverage);
+    const span = document.createElement("div");
+    span.className = "overview-span";
+    span.textContent = `往来跨度：${dateOnly(c.first_date)} ~ ${dateOnly(c.last_date)} · 共 ${c.email_count} 封`;
+    tdDetail.appendChild(span);
+    trDetail.appendChild(tdDetail);
+
+    tr.addEventListener("click", () => trDetail.classList.toggle("hidden"));
+    tr.addEventListener("dblclick", () => openOverviewTarget(c.target));
+    tbody.append(tr, trDetail);
+  }
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+}
+
+// 跳转到该目标：selectTarget 默认切到 chat 标签
+async function openOverviewTarget(target) {
+  await selectTarget(target);
+}
+
+// ---------- AI 起草回复 ----------
+
+function showDraftError(msg) {
+  el.draftError.textContent = msg;
+  el.draftError.classList.remove("hidden");
+}
+
+function openDraftModal() {
+  if (!state.target) { toast("请先选择联系人", true); return; }
+  el.draftModalMeta.textContent =
+    `联系人：${state.targetName ? `${state.targetName}（${state.target}）` : state.target}`;
+  el.draftError.classList.add("hidden");
+  el.draftResult.innerHTML = "";
+  el.draftModalMask.classList.remove("hidden");
+  el.draftInstruction.focus();
+}
+
+function closeDraftModal() { el.draftModalMask.classList.add("hidden"); }
+
+el.draftBtn.addEventListener("click", openDraftModal);
+el.draftModalClose.addEventListener("click", closeDraftModal);
+el.draftModalMask.addEventListener("click", (e) => {
+  if (e.target === el.draftModalMask) closeDraftModal();
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDraftModal(); });
+el.draftInstruction.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") el.draftGenerateBtn.click();
+});
+
+// 生成草稿：通常需 5-20 秒，期间禁用按钮；409/500 的错误文本显示在模态内
+el.draftGenerateBtn.addEventListener("click", async () => {
+  if (!state.target) { showDraftError("请先选择联系人"); return; }
+  el.draftGenerateBtn.disabled = true;
+  el.draftGenerateBtn.textContent = "生成中…";
+  el.draftError.classList.add("hidden");
+  el.draftResult.innerHTML = "";
+  try {
+    const { ok, data } = await fetchJson("/api/draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        target: state.target,
+        instruction: el.draftInstruction.value.trim(),
+      }),
+    });
+    if (!ok) { showDraftError(data.error || "生成失败，请稍后重试"); return; }
+    renderDrafts(data);
+  } catch (e) {
+    showDraftError(e.message);
+  } finally {
+    el.draftGenerateBtn.disabled = false;
+    el.draftGenerateBtn.textContent = "生成草稿";
+  }
+});
+
+function renderDrafts(data) {
+  const replyTo = data.in_reply_to || {};
+  el.draftModalMeta.textContent =
+    `联系人：${state.targetName ? `${state.targetName}（${state.target}）` : state.target}\n` +
+    `回复对象：${fmtTime(replyTo.date)} ${replyTo.subject || ""}`;
+  const wrap = el.draftResult;
+  wrap.innerHTML = "";
+  const subj = document.createElement("div");
+  subj.className = "draft-subject-bar";
+  subj.textContent = "邮件主题：" + (data.subject || "");
+  wrap.appendChild(subj);
+  for (const d of data.drafts || []) {
+    const card = document.createElement("div");
+    card.className = "draft-card";
+
+    const head = document.createElement("div");
+    head.className = "draft-card-head";
+    const tone = document.createElement("span");
+    tone.className = "draft-tone";
+    tone.textContent = d.tone || "草稿";
+    const btnCopy = document.createElement("button");
+    btnCopy.className = "btn-small";
+    btnCopy.textContent = "复制";
+    btnCopy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(d.body || "");
+        toast("已复制");
+      } catch (e) {
+        toast("复制失败：" + e.message, true);
+      }
+    });
+    head.append(tone, btnCopy);
+
+    const body = document.createElement("div");
+    body.className = "draft-body";
+    body.textContent = d.body || "";
+
+    card.append(head, body);
+    wrap.appendChild(card);
+  }
+}
+
 // ---------- 启动 ----------
 
 // 深色模式：偏好存 localStorage，<head> 内联脚本负责首屏恢复，这里接管切换与图标
+// 月亮/太阳为固定常量单色 SVG（currentColor），深色模式下图标颜色自动跟随
+const MOON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+const SUN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   try { localStorage.setItem("zemail:theme", theme); } catch (e) { /* 忽略 */ }
-  el.themeToggle.textContent = theme === "dark" ? "☀️" : "🌙";
+  el.themeToggle.innerHTML = theme === "dark" ? SUN_SVG : MOON_SVG;
 }
 el.themeToggle.addEventListener("click", () => {
   applyTheme(document.documentElement.dataset.theme === "dark" ? "" : "dark");

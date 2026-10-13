@@ -249,7 +249,9 @@ def parse_raw_email(raw: bytes, own_addr: str, target, body_chars: int = 2000):
     if not targets & addr_pool:
         return None
     try:
-        date = parsedate_to_datetime(str(msg.get("Date", "")))
+        # 剥掉旧式时区注释（如 "-0500 (EST)"），否则 parsedate_to_datetime 解析失败
+        date = parsedate_to_datetime(
+            re.sub(r"\([^)]*\)", " ", str(msg.get("Date", ""))).strip())
         if date is None:
             raise ValueError
         if date.tzinfo is not None:

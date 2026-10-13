@@ -205,6 +205,14 @@ class ContactStore:
                         c.get("name") or "")
         return ([target], "")
 
+    def find_by_address(self, addr: str) -> dict:
+        """按任一邮箱地址（含非主地址）查联系人；未建档返回 None。"""
+        addr = _norm_addr(addr)
+        for c in self._load().get("contacts") or []:
+            if addr in (c.get("addresses") or []):
+                return dict(c)
+        return None
+
     def contact_map(self) -> dict:
         """key → 联系人（含企业名），供列表页合并展示。"""
         data = self._load()

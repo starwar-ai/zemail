@@ -9,10 +9,12 @@
 生产部署：waitress-serve --listen=0.0.0.0:8000 --call web:create_app
 """
 import imaplib
+import json
 import os
 import re
 import secrets
 import shutil
+import tempfile
 import threading
 import time
 import uuid
@@ -22,7 +24,8 @@ from email.utils import getaddresses
 from flask import Flask, Response, jsonify, request, session
 
 import history
-from analyzer import Analyzer, LLMClient, REPORT_INSTRUCTION
+import importer
+from analyzer import Analyzer, LLMClient, REPORT_INSTRUCTION, ai_report_title
 from auth import UserError, UserStore, admin_required, current_user, login_required
 from bot import EMAIL_RE
 from config import (RUNTIME_SETTINGS, load_config, load_runtime_settings,
@@ -34,7 +37,7 @@ from mailer.cache import delete_cache, load_emails
 from monitor import Monitor, MonitorHub
 import draft
 import overview
-from preprocess import DerivedStore, delete_derived, load_derived
+from preprocess import DerivedStore, delete_derived, email_hash, load_derived
 from summaries import delete_summaries
 from threads import group_threads, normalize_subject, thread_report as gen_thread_report
 from wecom import WeComClient
@@ -53,6 +56,25 @@ def _session_user(username: str, target: str) -> str:
 
 def _safe_name(name: str) -> str:
     return re.sub(r"[^\w.@-]", "_", name)
+
+
+def _fallback_report_title(content: str) -> str:
+    """AI 命名失败时的本地回退：正文首个非标题行，剥掉 Markdown 记号后取前 15 字。"""
+    for raw in (content or "").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        text = re.sub(r"^[-*+]\s*", "", line).replace("**", "").strip()
+        if len(text) > 15:
+            text = text[:15]
+            # 截断停在半句时回退到最后一个标点前，避免结尾残缺
+            cut = max(text.rfind(c) for c in "，。、；：！？…,.;:!?")
+            if cut >= 6:
+                text = text[:cut]
+        text = text.rstrip("，。、；：！？…,.;:!? 、")
+        if text:
+            return text
+    return "（未命名）"
 
 
 def _display_name(emails: list, target: str) -> str:
@@ -591,7 +613,12 @@ def create_app(cfg=None):
     @app.post("/api/fetch")
     @login_required
     def fetch_new():
-        """增量抓取新邮件（只下载缓存之后的邮件），不动现有会话。"""
+        """增量抓取新邮件（只下载缓存之后的邮件）。
+
+        有新邮件且该目标已有会话时，顺带以最新往来重建会话（旧对话归档到
+        会话列表，可切回），让单按钮同时覆盖「查新邮件」和「让 AI 看到新邮件」；
+        没有新邮件或从未分析过的目标不动现有状态。
+        """
         data = request.get_json(silent=True) or {}
         match = _match_email(data.get("target", ""))
         if not match:
@@ -638,9 +665,231 @@ def create_app(cfg=None):
                 if get_job(job_id).get("cancel"):
                     set_job(job_id, status="cancelled")
                     return
+            # 有新邮件且目标已有会话时自动重建会话（旧对话归档），与「重新
+            # 抓取并分析」的会话阶段一致；从未分析过的目标保持未分析状态
+            session_rebuilt = False
+            if new_count > 0:
+                hdir = os.path.join(cfg.session_history_dir, _safe_name(username))
+                if history.get_sessions(hdir, target):
+                    if get_job(job_id).get("cancel"):
+                        set_job(job_id, status="cancelled")
+                        return
+                    set_job(job_id, stage="session")
+                    history.touch_session(hdir, target)
+                    sessions = history.get_sessions(hdir, target)
+                    idx = len(sessions) - 1
+                    history.set_active_index(hdir, target, idx)
+                    get_analyzer(username).prepare_session(
+                        _session_user(username, target), target, emails,
+                        history_index=idx)
+                    session_rebuilt = True
             set_job(job_id, status="done", target=target, count=len(emails),
-                    new=new_count,
+                    new=new_count, session_rebuilt=session_rebuilt,
                     date_range=f"{emails[0].date:%Y-%m-%d} ~ {emails[-1].date:%Y-%m-%d}")
+
+        threading.Thread(target=run, daemon=True).start()
+        return jsonify({"job_id": job_id})
+
+    # ---------- 邮件导入（.eml/.zip：上传暂存 + 后台异步导入） ----------
+
+    IMPORT_STAGING_TTL = 2 * 3600  # 暂存的导入批次保留时长（确认导入前有效）
+
+    def import_stage_dir(import_id: str) -> str:
+        return os.path.join(tempfile.gettempdir(), f"zemail-import-{import_id}")
+
+    def sweep_import_staging() -> None:
+        """清理过期的导入暂存目录。"""
+        try:
+            names = os.listdir(tempfile.gettempdir())
+        except OSError:
+            return
+        cutoff = time.time() - IMPORT_STAGING_TTL
+        for n in names:
+            if not n.startswith("zemail-import-"):
+                continue
+            path = os.path.join(tempfile.gettempdir(), n)
+            try:
+                if os.path.isdir(path) and os.path.getmtime(path) < cutoff:
+                    shutil.rmtree(path, ignore_errors=True)
+            except OSError:
+                pass
+
+    def own_addr_of(username: str) -> str:
+        """当前用户生效的本人邮箱地址（个人设置优先），导入时用于方向判定。"""
+        ms = users.get_mail_settings(username)
+        return (ms.get("email_address") or cfg.email_address or "").strip().lower()
+
+    def map_groups(username: str, groups: dict) -> dict:
+        """把按地址分组的邮件归并到缓存键：已建档联系人（含非主地址）归到其主地址。"""
+        store = contact_hub.store(username)
+        mapped = {}
+        for addr, g in groups.items():
+            contact = store.find_by_address(addr)
+            key = contact["key"] if contact else addr
+            mg = mapped.setdefault(key, {
+                "key": key,
+                "name": (contact or {}).get("name") or "",
+                "addresses": list((contact or {}).get("addresses") or [addr]),
+                "items": [], "subjects": [], "first": g["first"], "last": g["last"],
+            })
+            mg["items"].extend(g["items"])
+            for s in g["subjects"]:
+                if len(mg["subjects"]) < 5 and s not in mg["subjects"]:
+                    mg["subjects"].append(s)
+            mg["first"] = min(mg["first"], g["first"])
+            mg["last"] = max(mg["last"], g["last"])
+        return mapped
+
+    @app.post("/api/import/preview")
+    @login_required
+    def import_preview():
+        """上传并暂存导入文件，解析分组返回预览；正式导入凭 import_id 异步进行。
+
+        文件流式落盘到系统临时目录（zip 即时解包），内存占用与批次大小无关，
+        不限制文件数与总大小，仅校验服务器磁盘剩余空间。
+        """
+        username = current_user()["username"]
+        own = own_addr_of(username)
+        if not own:
+            return jsonify({"error": "请先在「个人中心」填写邮箱地址，再导入邮件"}), 400
+        uploads = request.files.getlist("files")
+        if not uploads:
+            return jsonify({"error": "请选择要导入的 .eml 或 .zip 文件"}), 400
+        free = shutil.disk_usage(tempfile.gettempdir()).free
+        need = (request.content_length or 0) * 2
+        if need and free < need + 100 * 1024 * 1024:
+            return jsonify({"error": "服务器磁盘剩余空间不足，无法接收该批文件"}), 400
+        sweep_import_staging()
+        import_id = uuid.uuid4().hex
+        stage_dir = import_stage_dir(import_id)
+        os.makedirs(stage_dir)
+        try:
+            seen = {}
+            for f in uploads:
+                base = os.path.basename(
+                    (f.filename or "").replace("\\", "/")) or "未命名.eml"
+                n = seen.get(base, 0)
+                seen[base] = n + 1
+                if n:
+                    base = f"{n}-{base}"
+                f.save(os.path.join(stage_dir, base))
+            items, failures = importer.unpack_staged(stage_dir)
+            groups, gfailures = importer.group_items(items, own)
+            # meta 只存解包失败的文件；分组失败的由正式导入重新分组时重新产生
+            importer.save_meta(stage_dir, items, failures)
+            failures += gfailures
+        except Exception as exc:
+            shutil.rmtree(stage_dir, ignore_errors=True)
+            app.logger.exception("导入预览失败")
+            return jsonify({"error": f"解析上传文件失败：{exc}"}), 500
+        mapped = map_groups(username, groups)
+        out = sorted(mapped.values(), key=lambda g: -len(g["items"]))
+        return jsonify({
+            "own_addr": own,
+            "import_id": import_id,
+            "groups": [{
+                "key": g["key"], "name": g["name"], "addresses": g["addresses"],
+                "count": len(g["items"]),
+                "first_date": f"{g['first']:%Y-%m-%d}",
+                "last_date": f"{g['last']:%Y-%m-%d}",
+                "subjects": g["subjects"],
+                "files": [n for n, _ in g["items"]][:100],
+            } for g in out],
+            "failures": failures,
+        })
+
+    @app.post("/api/import")
+    @login_required
+    def import_emails():
+        """确认导入：按 import_id 从暂存批次后台导入勾选的分组，返回 job_id。
+
+        任务进度经 /api/jobs/<job_id> 轮询（done/total 为文件级进度），支持
+        /api/jobs/<id>/cancel 取消（已落盘的分组不回滚）。导入后：监控中的
+        目标同步 seen 基线（历史邮件不误报新邮件）；已有会话的目标按最新往来
+        重建会话（旧对话归档）；新目标登记空会话块使其出现在侧边栏。
+        """
+        username = current_user()["username"]
+        own = own_addr_of(username)
+        if not own:
+            return jsonify({"error": "请先在「个人中心」填写邮箱地址，再导入邮件"}), 400
+        data = request.get_json(silent=True) or {}
+        import_id = str(data.get("import_id", ""))
+        if not re.fullmatch(r"[0-9a-f]{32}", import_id):
+            return jsonify({"error": "无效的导入会话"}), 400
+        stage_dir = import_stage_dir(import_id)
+        try:
+            items, unpack_failures = importer.load_meta(stage_dir)
+        except importer.ImportRejected as exc:
+            return jsonify({"error": str(exc)}), 409
+        accepted = None
+        targets = data.get("targets")
+        if isinstance(targets, list) and targets:
+            accepted = {str(x).strip().lower() for x in targets}
+        job_id = uuid.uuid4().hex
+        set_job(job_id, status="running", stage="import", created=time.time(),
+                owner=username, done=0)
+
+        def run() -> None:
+            results, done = [], 0
+            try:
+                groups, gfailures = importer.group_items(items, own)
+                all_failures = unpack_failures + gfailures
+                mapped = map_groups(username, groups)
+                if accepted:
+                    mapped = {k: v for k, v in mapped.items() if k in accepted}
+                if not mapped:
+                    set_job(job_id, status="error", error="没有可导入的邮件",
+                            failures=all_failures)
+                    return
+                total = sum(len(g["items"]) for g in mapped.values())
+                set_job(job_id, total=total)
+                cache_dir = user_cache_dir(username)
+                mstore = monitor_hub.store(username)
+                watch = mstore.get_watch()
+                cancelled = False
+                for key, g in sorted(mapped.items(), key=lambda kv: -len(kv[1]["items"])):
+                    def _progress(i, _n, _done=done):
+                        set_job(job_id, done=_done + i, total=total)
+
+                    try:
+                        r = importer.import_group(
+                            cache_dir, key, g["addresses"], g["items"], own,
+                            cfg.email_body_chars, progress=_progress,
+                            cancelled=lambda: get_job(job_id).get("cancel"))
+                    except importer.ImportCancelled:
+                        cancelled = True
+                        break
+                    done += len(g["items"])
+                    set_job(job_id, done=done)
+                    merged = r.pop("emails")
+                    if key in watch:
+                        mstore.update_state(key, seen=[email_hash(e) for e in merged])
+                    hdir = os.path.join(cfg.session_history_dir, _safe_name(username))
+                    had_sessions = bool(history.get_sessions(hdir, key))
+                    if not had_sessions and r["total"] > 0:
+                        # 新目标：登记空会话块，让侧边栏能看到（首次对话时再按需建会话）
+                        history.touch_session(hdir, key)
+                    session_rebuilt = False
+                    if r["new"] > 0 and had_sessions:
+                        history.touch_session(hdir, key)
+                        sessions = history.get_sessions(hdir, key)
+                        idx = len(sessions) - 1
+                        history.set_active_index(hdir, key, idx)
+                        get_analyzer(username).prepare_session(
+                            _session_user(username, key), key, merged,
+                            history_index=idx)
+                        session_rebuilt = True
+                    results.append({"key": key, "name": g["name"],
+                                    "session_rebuilt": session_rebuilt, **r})
+                shutil.rmtree(stage_dir, ignore_errors=True)
+                if cancelled:
+                    set_job(job_id, status="cancelled", results=results,
+                            failures=all_failures)
+                else:
+                    set_job(job_id, status="done", results=results,
+                            failures=all_failures)
+            except Exception as exc:
+                set_job(job_id, status="error", error=f"导入失败：{exc}")
 
         threading.Thread(target=run, daemon=True).start()
         return jsonify({"job_id": job_id})
@@ -1044,8 +1293,13 @@ def create_app(cfg=None):
         except Exception as exc:
             return jsonify({"error": str(exc)}), 500
         version = history.add_report(user_history_dir(), target, report, meta=meta)
+        # 新版报告顺手用 AI 命名（≤15 字）；失败回退正文首行摘要，一并落库
+        title = (ai_report_title(get_analyzer(username).card_llm, report)
+                 or _fallback_report_title(report))
+        history.set_report_title(user_history_dir(), target, version, title)
         entry = history.get_reports(user_history_dir(), target)[-1]
-        return jsonify({"version": version, "time": entry["time"], "report": report})
+        return jsonify({"version": version, "time": entry["time"],
+                        "title": title, "report": report})
 
     @app.post("/api/report/stream")
     @login_required
@@ -1089,7 +1343,17 @@ def create_app(cfg=None):
             except Exception as exc:
                 yield f"\n\n[出错：{exc}]"
                 return
-            history.add_report(user_history_dir(), target, "".join(full).strip(), meta=meta)
+            content = "".join(full).strip()
+            version = history.add_report(user_history_dir(), target, content, meta=meta)
+
+            # 流已结束，AI 命名放后台线程补，不拖住响应
+            def name_report():
+                title = (ai_report_title(get_analyzer(username).card_llm, content)
+                         or _fallback_report_title(content))
+                if title:
+                    history.set_report_title(user_history_dir(), target, version, title)
+
+            threading.Thread(target=name_report, daemon=True).start()
 
         return Response(gen(), mimetype="text/plain; charset=utf-8")
 
@@ -1125,7 +1389,39 @@ def create_app(cfg=None):
             ],
         }
         version = history.add_report(user_history_dir(), target, content, meta=meta)
-        return jsonify({"version": version})
+        title = (ai_report_title(get_analyzer(username).card_llm, content)
+                 or _fallback_report_title(content))
+        history.set_report_title(user_history_dir(), target, version, title)
+        return jsonify({"version": version, "title": title})
+
+    @app.post("/api/report/title")
+    @login_required
+    def report_title_set():
+        """设置某版报告的名称：传 title 为用户编辑（≤50 字），不传则由 AI 总结（≤15 字）。"""
+        data = request.get_json(silent=True) or {}
+        match = _match_email(data.get("target", ""))
+        if not match:
+            return jsonify({"error": "请提供有效的目标邮箱地址"}), 400
+        target = match.group(0)
+        username = current_user()["username"]
+        version = data.get("version")
+        if not isinstance(version, int):
+            return jsonify({"error": "缺少版本号"}), 400
+        title = str(data.get("title", "")).strip()
+        if title:
+            if len(title) > 50:
+                return jsonify({"error": "名称最多 50 字"}), 400
+        else:
+            picked = next((r for r in history.get_reports(user_history_dir(), target)
+                           if r.get("version") == version), None)
+            if picked is None:
+                return jsonify({"error": "该版本不存在"}), 404
+            title = (ai_report_title(get_analyzer(username).card_llm,
+                                     picked.get("content", ""))
+                     or _fallback_report_title(picked.get("content", "")))
+        if not history.set_report_title(user_history_dir(), target, version, title):
+            return jsonify({"error": "该版本不存在"}), 404
+        return jsonify({"title": title})
 
     @app.get("/api/export/<path:email>")
     @login_required
@@ -1506,6 +1802,7 @@ if __name__ == "__main__":
     try:
         from waitress import serve
         print(f"服务已启动：http://localhost:{port}")
-        serve(application, host="0.0.0.0", port=port, threads=8)
+        serve(application, host="0.0.0.0", port=port, threads=8,
+              max_request_body_size=20 * 1024 * 1024 * 1024)  # 邮件导入允许大体积 zip
     except ImportError:
         application.run(host="0.0.0.0", port=port, threaded=True)

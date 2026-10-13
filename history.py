@@ -50,8 +50,8 @@ def touch_session(history_dir: str, target: str) -> None:
     _save(history_dir, target, data)
 
 
-def start_session(history_dir: str, target: str, first_question: str, first_reply: str) -> None:
-    """一次新的分析开始时，记录首个问题（总体分析指令）与报告。"""
+def start_session(history_dir: str, target: str, first_question: str, first_reply: str) -> int:
+    """一次新的分析开始时，记录首个问题（总体分析指令）与报告。返回报告版本号。"""
     data = _load(history_dir, target)
     data["sessions"].append({
         "started_at": _now(),
@@ -60,12 +60,11 @@ def start_session(history_dir: str, target: str, first_question: str, first_repl
             {"role": "assistant", "content": first_reply, "time": _now()},
         ],
     })
-    data.setdefault("reports", []).append({
-        "version": len(data.get("reports") or []) + 1,
-        "time": _now(),
-        "content": first_reply,
-    })
+    reports = data.setdefault("reports", [])
+    version = len(reports) + 1
+    reports.append({"version": version, "time": _now(), "content": first_reply})
     _save(history_dir, target, data)
+    return version
 
 
 def add_report(history_dir: str, target: str, content: str, meta: dict = None) -> int:
@@ -121,6 +120,20 @@ def set_title(history_dir: str, target: str, session_index: int, title: str) -> 
     if isinstance(session_index, int) and 0 <= session_index < len(data["sessions"]):
         data["sessions"][session_index]["title"] = title
         _save(history_dir, target, data)
+
+
+def set_report_title(history_dir: str, target: str, version: int, title: str) -> bool:
+    """设置某版报告的名称（AI 总结或用户编辑）。旧格式文件先物化报告列表。"""
+    data = _load(history_dir, target)
+    reports = data.get("reports")
+    if not isinstance(reports, list):
+        reports = data["reports"] = get_reports(history_dir, target)
+    for r in reports:
+        if r.get("version") == version:
+            r["title"] = title
+            _save(history_dir, target, data)
+            return True
+    return False
 
 
 def delete_target(history_dir: str, target: str) -> bool:

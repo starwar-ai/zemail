@@ -88,13 +88,25 @@ def thread_ids(emails: list) -> list:
 
 _THREAD_REPORT_INSTRUCTION = (
     "以下是我的邮箱与 {target} 在「{subject}」这一主题下的往来邮件"
-    "（共 {count} 封，按时间升序）。请梳理这个主题的来龙去脉，输出中文报告：\n"
-    "1. 起因：主题因何而起、由谁提出；\n"
-    "2. 时间线：按时间列出关键进展（每步注明日期与要点）；\n"
-    "3. 结论与现状：已达成的共识、尚未解决的事项；\n"
-    "4. 关键数字：涉及的价格、数量、日期等重要数字及其变化。\n"
-    "严格依据邮件内容，直接输出正文，不要标题或解释。"
+    "（共 {count} 封，按时间升序）。请梳理这个主题的来龙去脉，"
+    "用 Markdown 按下面模板输出中文报告（模板外不要任何解释）：\n"
+    "## 一句话结论\n"
+    "（用一句话概括当前状态与走向，不超过 40 字）\n"
+    "## 起因\n"
+    "- （主题因何而起、由谁提出；1~3 条，每条一行）\n"
+    "## 关键进展\n"
+    "- **M月D日** 要点（谁做了什么、结果如何；按时间升序）\n"
+    "## 结论与现状\n"
+    "- ✅ 已达成：……（没有就写“暂无”）\n"
+    "- ⏳ 待跟进：……（没有就写“暂无”）\n"
+    "## 关键数字\n"
+    "- 指标：数值（涉及的价格、数量、日期、版本号等及其变化；无则整节省略）\n"
+    "要求：严格依据邮件内容；每条要点不超过 30 字，日期写成 M月D日；"
+    "关键数字加粗；不要编造。"
 )
+
+# 报告模板版本：升级提示词模板时递增，旧缓存（无前缀键）自动失效
+_REPORT_TPL_VERSION = 2
 
 _MATERIAL_CHARS = 16000  # 线程报告的输入预算：超长线程掐头留尾
 
@@ -122,7 +134,7 @@ def thread_report(llm, store, target: str, emails: list, indices: list) -> str:
 
     线程内任一邮件变化（或有新邮件并入线程）则缓存失效、重新生成。
     """
-    key = hashlib.md5(
+    key = f"v{_REPORT_TPL_VERSION}:" + hashlib.md5(
         "|".join(email_hash(emails[i]) for i in indices).encode("ascii")
     ).hexdigest()
     cached = (store.data.get("threads") or {}).get(key)
@@ -134,6 +146,12 @@ def thread_report(llm, store, target: str, emails: list, indices: list) -> str:
         + "\n\n" + _thread_materials(emails, indices))
     text = llm.chat([{"role": "user", "content": prompt}]).strip()
     if text:
-        store.data.setdefault("threads", {})[key] = text
+        threads = store.data.setdefault("threads", {})
+        # 顺手清掉旧模板的缓存条目，避免派生文件无限累积
+        stale = [k for k in threads
+                 if not k.startswith(f"v{_REPORT_TPL_VERSION}:")]
+        for k in stale:
+            del threads[k]
+        threads[key] = text
         store.save()
     return text

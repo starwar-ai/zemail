@@ -20,6 +20,10 @@
 #   --service-user <n>   服务运行用户（默认 zemail，不存在则自动创建）
 #   --push-env           用本机 .env 覆盖服务器 .env（覆盖后自动重启）
 #   --no-env             首次部署也不上传本机 .env（自行上服务器编辑）
+#   --with-data          连同本机 data/ 测试数据一起同步（emails/sessions/
+#                        contacts/monitor 增量合并；users.json 双边合并，
+#                        同名用户以本机为准，生产独有用户保留；服务器上的
+#                        settings.json 与 .secret_key 不动，同步前自动备份）
 #   --skip-apt           传给 deploy.sh：跳过 apt 系统依赖安装（离线环境用）
 set -euo pipefail
 
@@ -30,6 +34,7 @@ APP_DIR="/opt/zemail"
 SERVICE_USER="zemail"
 PUSH_ENV=0
 NO_ENV=0
+WITH_DATA=0
 SKIP_APT_FLAG=""
 
 while [ $# -gt 0 ]; do
@@ -41,8 +46,9 @@ while [ $# -gt 0 ]; do
     --service-user) SERVICE_USER="$2"; shift 2 ;;
     --push-env)     PUSH_ENV=1; shift ;;
     --no-env)       NO_ENV=1; shift ;;
+    --with-data)    WITH_DATA=1; shift ;;
     --skip-apt)     SKIP_APT_FLAG="--skip-apt"; shift ;;
-    -h|--help)      sed -n '2,27p' "$0"; exit 0 ;;
+    -h|--help)      sed -n '2,31p' "$0"; exit 0 ;;
     *) echo "未知参数: $1（--help 查看用法）" >&2; exit 1 ;;
   esac
 done
@@ -51,6 +57,8 @@ SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SSH_DEST="$SSH_USER@$SERVER"
 STAGE_DIR="/tmp/zemail-deploy-src"
 SERVICE_NAME="zemail"
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
 
 echo "==> 目标: http://$SERVER:$APP_PORT  ($SSH_DEST:$APP_DIR)"
 
@@ -88,6 +96,67 @@ ssh "$SSH_DEST" "test -f '$APP_DIR/.env'" || FIRST_DEPLOY=1
 # ---------- 5. 服务器端执行 deploy.sh ----------
 echo "==> 在服务器上执行 deploy.sh（端口 $APP_PORT）..."
 ssh "$SSH_DEST" "cd '$STAGE_DIR' && $SUDO bash deploy.sh --dir '$APP_DIR' --port '$APP_PORT' --user '$SERVICE_USER' $SKIP_APT_FLAG"
+
+# ---------- 5.5 同步本机测试数据（--with-data） ----------
+if [ "$WITH_DATA" = "1" ]; then
+  echo "==> 同步本机测试数据到服务器..."
+  PAYLOAD="$TMP_DIR/data-payload"
+  mkdir -p "$PAYLOAD"
+
+  # 收集数据目录（存在才带上）
+  for d in emails sessions contacts monitor; do
+    if [ -d "$SRC_DIR/data/$d" ]; then
+      cp -r "$SRC_DIR/data/$d" "$PAYLOAD/"
+    fi
+  done
+
+  # users.json：拉取生产版本，与本机合并（同名用户以本机为准，生产独有用户保留）
+  if [ -f "$SRC_DIR/data/users.json" ]; then
+    PYBIN="$(command -v python || command -v python3)"
+    ssh "$SSH_DEST" "$SUDO cat '$APP_DIR/data/users.json' 2>/dev/null" > "$TMP_DIR/prod-users.json" || true
+    # JSON 内容经环境变量传入，避免 Windows Python 打不开 msys 路径
+    LOCAL_USERS="$(cat "$SRC_DIR/data/users.json")" \
+    PROD_USERS="$(cat "$TMP_DIR/prod-users.json" 2>/dev/null)" \
+      "$PYBIN" -c '
+import json, os
+local = json.loads(os.environ["LOCAL_USERS"])
+try:
+    prod = json.loads(os.environ["PROD_USERS"])
+    if not isinstance(prod, dict):
+        prod = {}
+except Exception:
+    prod = {}
+prod.update(local)
+print(json.dumps(prod, ensure_ascii=False, indent=1))
+' > "$PAYLOAD/users.json"
+    MERGED_USERS="$(cat "$PAYLOAD/users.json")" \
+      "$PYBIN" -c 'import json, os; print(", ".join(json.loads(os.environ["MERGED_USERS"]).keys()))' \
+      | { read -r names; echo "    合并后用户: $names"; }
+  fi
+
+  # 上传数据包
+  tar -C "$PAYLOAD" -czf - . | ssh "$SSH_DEST" "mkdir -p '$STAGE_DIR/data-payload' && tar -xzf - -C '$STAGE_DIR/data-payload'"
+
+  # 服务器端：备份现有 data/ → 增量解包 → users.json 就位 → 归属修正
+  BACKUP_TAG="$(date +%Y%m%d-%H%M%S)"
+  ssh "$SSH_DEST" "
+    $SUDO tar -czf /root/zemail-data-backup-$BACKUP_TAG.tar.gz -C '$APP_DIR' data 2>/dev/null || true
+    $SUDO mkdir -p '$APP_DIR/data'
+    $SUDO tar -C '$STAGE_DIR/data-payload' -c --exclude=./users.json . | $SUDO tar -C '$APP_DIR/data' -x
+    if [ -f '$STAGE_DIR/data-payload/users.json' ]; then
+      $SUDO cp '$STAGE_DIR/data-payload/users.json' '$APP_DIR/data/users.json'
+      $SUDO chmod 600 '$APP_DIR/data/users.json'
+    fi
+    $SUDO chown -R '$SERVICE_USER':'$SERVICE_USER' '$APP_DIR/data'
+  "
+  echo "    已备份服务器原数据: /root/zemail-data-backup-$BACKUP_TAG.tar.gz"
+
+  # 服务已在运行则重启以加载新数据（首次部署由后续步骤统一启动）
+  if [ "$(ssh "$SSH_DEST" "$SUDO systemctl is-active $SERVICE_NAME 2>/dev/null" || true)" = "active" ]; then
+    echo "==> 重启服务加载新数据..."
+    ssh "$SSH_DEST" "$SUDO systemctl restart $SERVICE_NAME"
+  fi
+fi
 
 # ---------- 6. .env 处理与启动 ----------
 NEED_START=0

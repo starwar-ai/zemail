@@ -123,7 +123,7 @@ User=$APP_USER
 WorkingDirectory=$APP_DIR
 Environment=PORT=$APP_PORT
 EnvironmentFile=-$APP_DIR/.env
-ExecStart=$VENV_DIR/bin/waitress-serve --listen=0.0.0.0:$APP_PORT --call web:create_app
+ExecStart=$VENV_DIR/bin/waitress-serve --listen=0.0.0.0:$APP_PORT --max-request-body-size=21474836480 --call web:create_app
 Restart=always
 RestartSec=3
 

@@ -253,14 +253,32 @@
 
   /* 报告版本工具栏 */
   .report-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
-  .report-toolbar select {
-    padding: 7px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px;
-    outline: none; background: #fff; max-width: 100%;
-  }
-  .report-toolbar select:focus {
-    border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
-  }
   .report-toolbar .btn-primary { width: auto; padding: 7px 18px; }
+
+  /* 报告页左右布局：左侧报告列表（可搜索），右侧正文/素材 */
+  .report-layout { display: flex; gap: 20px; align-items: flex-start; }
+  .report-list-col { width: 220px; flex-shrink: 0; }
+  .report-search { margin-bottom: 8px; }
+  .report-search input {
+    width: 100%; padding: 7px 11px; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: 13px; outline: none; background: #fff;
+  }
+  .report-search input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+  .report-list { display: flex; flex-direction: column; gap: 2px; max-height: calc(100vh - 260px); overflow-y: auto; }
+  .report-item {
+    padding: 8px 10px; border-radius: 8px; cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .report-item:hover { background: #f3f4f6; }
+  .report-item.active { background: var(--primary-light); border-color: #bfdbfe; }
+  .report-item .r-title {
+    font-size: 13px; font-weight: 600; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .report-item .r-title.untitled { color: var(--text-3); font-weight: 400; }
+  .report-item .r-meta { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+  .report-list-empty { color: var(--text-3); font-size: 12px; padding: 12px 4px; }
+  .report-main { flex: 1; min-width: 0; }
   /* 低调的图标按钮（删除本版等）：平时灰，悬停才显红色 */
   .icon-btn {
     border: none; background: none; padding: 6px; border-radius: 6px;
@@ -286,6 +304,14 @@
     margin-top: 10px; display: flex; flex-direction: column; gap: 10px;
   }
   .report-history-empty { font-size: 12.5px; color: var(--text-3); margin-top: 8px; }
+
+  /* 报告名称：正文上方标题行（AI 总结 ≤15 字，可编辑 / AI 重新命名） */
+  .report-title-bar { display: flex; align-items: center; gap: 4px; margin-bottom: 12px; min-height: 30px; }
+  .report-title-bar h2 {
+    flex: 1 1 auto; min-width: 0; margin: 0; font-size: 15px; font-weight: 600;
+    color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .report-title-bar h2.untitled { color: var(--text-3); font-weight: 400; }
 
   /* 「已自定义」徽标 */
   .prompt-dirty {
@@ -406,10 +432,29 @@
   .tr-subject { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .tr-line2 { font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tr-line2 .tr-peer { color: var(--text-2); }
-  .tr-report { font-size: 13.5px; }
+  .tr-report { font-size: 13.5px; background: var(--bg); border-radius: 8px; padding: 12px 14px; }
   .tr-report.markdown-body { max-width: 100%; font-size: 13.5px; line-height: 1.75; }
-  .tr-report.markdown-body h1, .tr-report.markdown-body h2, .tr-report.markdown-body h3 { font-size: 14px; margin: 12px 0 6px; }
   .tr-report.markdown-body > :first-child { margin-top: 0; }
+  /* 报告模板的 ## 小节标题：与「邮件时间线 / AI 梳理」分区标题同款（蓝色小竖条） */
+  .tr-report.markdown-body h2 {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 700; color: var(--text-2);
+    letter-spacing: .05em; margin: 14px 0 6px;
+  }
+  .tr-report.markdown-body h2::before {
+    content: ""; flex: none; width: 3px; height: 12px;
+    border-radius: 2px; background: var(--primary);
+  }
+  .tr-report.markdown-body h1, .tr-report.markdown-body h3 { font-size: 14px; margin: 12px 0 6px; }
+  /* 紧凑圆点列表，替代默认 disc，便于逐条扫读 */
+  .tr-report.markdown-body ul { list-style: none; padding-left: 2px; margin: 2px 0 6px; }
+  .tr-report.markdown-body li { position: relative; padding-left: 13px; margin: 4px 0; }
+  .tr-report.markdown-body li::before {
+    content: ""; position: absolute; left: 0; top: .68em;
+    width: 4px; height: 4px; border-radius: 50%; background: var(--text-3);
+  }
+  .tr-report.markdown-body p { margin: 4px 0; }
+  .tr-report.markdown-body strong { color: var(--text); }
   /* 往来邮件页布局：筛选/计数在顶，操作栏钉在底部，表格区内部滚动 */
   #tab-emails { display: flex; flex-direction: column; overflow: hidden; }
   #mail-table-wrap { flex: 1; min-height: 0; overflow: auto; }
@@ -689,6 +734,10 @@
     #tabs { overflow-x: auto; padding: 10px 12px 0; }
     .tab { white-space: nowrap; }
     .tab-pane { padding: 14px 12px 40px; }
+    /* 报告页：左侧列表收拢到上方，限高滚动 */
+    .report-layout { flex-direction: column; }
+    .report-list-col { width: 100%; }
+    .report-list { max-height: 180px; }
     /* 邮件表格：横向滚动容器，列保持可读宽度 */
     #mail-table-wrap { overflow-x: auto; }
     .mail-table { min-width: 640px; }
@@ -798,21 +847,22 @@
   [data-theme="dark"] .msg.assistant, [data-theme="dark"] .report-meta-bar,
   [data-theme="dark"] .report-prompt-text, [data-theme="dark"] .more-menu,
   [data-theme="dark"] .chip-btn, [data-theme="dark"] .toast,
-  [data-theme="dark"] .report-toolbar select, [data-theme="dark"] .mail-filter select,
+  [data-theme="dark"] .mail-filter select,
   [data-theme="dark"] .session-bar select,
   [data-theme="dark"] .mail-filter input, [data-theme="dark"] .users-add input,
   [data-theme="dark"] .users-add select, [data-theme="dark"] .settings-row input,
   [data-theme="dark"] .chat-input-row textarea, [data-theme="dark"] .profile-body textarea, [data-theme="dark"] .profile-form input,
-  [data-theme="dark"] .target-search input,
+  [data-theme="dark"] .target-search input, [data-theme="dark"] .report-search input,
   [data-theme="dark"] .login-card input, [data-theme="dark"] #dlg-input {
     background: #151d2b; color: var(--text); border-color: #4b5563;
   }
   [data-theme="dark"] .mail-table th { background: #1b2636; }
   [data-theme="dark"] .mail-table tbody tr:hover, [data-theme="dark"] .target-item:hover,
+  [data-theme="dark"] .report-item:hover,
   [data-theme="dark"] .btn-ghost:hover, [data-theme="dark"] .btn-small:hover,
   [data-theme="dark"] .btn-icon:hover, [data-theme="dark"] .more-item:hover { background: #1f2a3a; }
   [data-theme="dark"] .mail-table td { border-bottom-color: #22304a; }
-  [data-theme="dark"] .target-item.active { background: #17293f; border-color: #2d4a6f; }
+  [data-theme="dark"] .target-item.active, [data-theme="dark"] .report-item.active { background: #17293f; border-color: #2d4a6f; }
   [data-theme="dark"] .markdown-body code, [data-theme="dark"] .msg.assistant code { background: #22304a; }
   [data-theme="dark"] .markdown-body pre, [data-theme="dark"] .msg.assistant pre { background: #111a28; }
   [data-theme="dark"] .markdown-body th, [data-theme="dark"] .markdown-body td,
@@ -962,15 +1012,15 @@
   .contact-group-head .cg-op { visibility: hidden; flex: none; }
   .contact-group-head:hover .cg-op { visibility: visible; }
   .contact-group-head .cg-op svg { width: 12px; height: 12px; display: block; }
-  /* 联系人条目悬停编辑铅笔（仿 target-del，图标型） */
-  .target-edit {
+  /* 联系人条目悬停编辑铅笔 / 建档按钮（仿 target-del，图标型） */
+  .target-edit, .target-register {
     border: none; background: none; color: var(--text-3);
     padding: 2px 6px; border-radius: 6px; line-height: 1; flex-shrink: 0;
     visibility: hidden;
   }
-  .target-item:hover .target-edit { visibility: visible; }
-  .target-edit:hover { background: #f3f4f6; color: var(--text); }
-  .target-edit svg { width: 13px; height: 13px; display: block; }
+  .target-item:hover .target-edit, .target-item:hover .target-register { visibility: visible; }
+  .target-edit:hover, .target-register:hover { background: #f3f4f6; color: var(--text); }
+  .target-edit svg, .target-register svg { width: 13px; height: 13px; display: block; }
   /* 联系人管理对话框 */
   .contact-modal { width: 520px; }
   .contact-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
@@ -1017,6 +1067,39 @@
     .contact-form { grid-template-columns: 1fr; }
     .target-edit { visibility: visible; }
   }
+
+  /* ---------- 导入邮件（.eml / .zip 导入弹窗） ---------- */
+  .import-modal { width: 620px; }
+  .import-group {
+    display: flex; gap: 10px; align-items: flex-start; cursor: pointer;
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 8px;
+  }
+  .import-group input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+  .import-group-main { flex: 1; min-width: 0; }
+  .import-group-title { font-size: 13.5px; font-weight: 600; word-break: break-all; }
+  .import-group-meta { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+  .import-group-subjects {
+    font-size: 12px; color: var(--text-2); margin-top: 4px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .import-sec { font-size: 12px; font-weight: 600; color: var(--text-2); margin: 14px 0 6px; }
+  .import-sec:first-child { margin-top: 0; }
+  .import-fail-item { font-size: 12.5px; color: var(--red); padding: 3px 0; word-break: break-all; }
+  .import-result-row {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 8px; font-size: 13px;
+  }
+  .import-result-row .ir-title { font-weight: 600; word-break: break-all; }
+  .import-result-row .ir-detail { font-size: 12.5px; color: var(--text-2); margin-top: 3px; }
+  .import-footer {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 12px 20px; border-top: 1px solid var(--border);
+  }
+  .import-footer .btn-primary, .import-footer .btn-ghost { width: auto; padding: 7px 18px; }
+  [data-theme="dark"] .import-group, [data-theme="dark"] .import-result-row {
+    background: #151d2b; border-color: #4b5563;
+  }
 </style>
 </head>
 <body>
@@ -1057,6 +1140,9 @@
       </button>
       <button id="nav-monitor" class="side-nav-item">
         <span class="side-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>监控中心<span id="monitor-nav-badge" class="tab-badge hidden"></span>
+      </button>
+      <button id="nav-import" class="side-nav-item" title="从本地 .eml 文件或 .zip 压缩包导入往来邮件">
+        <span class="side-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>导入邮件
       </button>
     </div>
     <div class="target-list-head">
@@ -1113,51 +1199,12 @@
 
     <div id="workspace" class="hidden">
       <nav id="tabs">
-        <button class="tab active" data-tab="chat">AI调查</button>
+        <button class="tab active" data-tab="emails">往来邮件</button>
+        <button class="tab" data-tab="chat">AI调查</button>
         <button class="tab" data-tab="report">分析报告</button>
-        <button class="tab" data-tab="emails">往来邮件</button>
       </nav>
 
-      <section id="tab-report" class="tab-pane hidden">
-        <div class="report-toolbar">
-          <select id="report-version" class="hidden"></select>
-          <button id="report-del-btn" class="icon-btn hidden" title="删除本版" aria-label="删除本版">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/>
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-              <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
-            </svg>
-          </button>
-          <button id="export-btn" class="icon-btn plain" style="margin-left: auto;" title="导出报告" aria-label="导出报告">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/>
-            </svg>
-          </button>
-        </div>
-        <div class="report-subtabs">
-          <button class="tab active" data-report-sub="body">正文</button>
-          <button class="tab" data-report-sub="material">素材</button>
-        </div>
-        <div id="report-body-pane">
-          <div id="report-content"></div>
-        </div>
-        <div id="report-material-pane" class="hidden">
-          <div id="report-meta-wrap" class="report-meta-wrap hidden">
-            <div class="report-meta-bar"><span id="report-meta-text"></span></div>
-            <details id="report-history-details" class="report-history">
-              <summary>会话履历</summary>
-              <div id="report-history-list" class="report-history-list"></div>
-            </details>
-            <details id="report-prompt-details" class="report-history hidden">
-              <summary>本次生成要求</summary>
-              <div id="report-prompt-text" class="report-prompt-text"></div>
-            </details>
-          </div>
-          <div id="report-material-empty" class="pane-empty hidden">暂无素材。生成报告后可在此查看素材来源、会话履历和生成要求。</div>
-        </div>
-      </section>
-
-      <section id="tab-emails" class="tab-pane hidden">
+      <section id="tab-emails" class="tab-pane">
         <div class="mail-filter">
           <input type="text" id="mail-keyword" placeholder="搜索主题、正文、收发件人…">
           <div class="mail-view-toggle" id="mail-view-toggle">
@@ -1191,14 +1238,73 @@
           <div class="more-wrap">
             <button id="more-btn" class="btn-ghost" title="更多操作">⋯</button>
             <div id="more-menu" class="more-menu hidden">
-              <button id="reanalyze-btn" class="more-item">重新抓取并分析</button>
               <button id="reset-btn" class="more-item danger">重置会话</button>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="tab-chat" class="tab-pane">
+      <section id="tab-report" class="tab-pane hidden">
+        <div class="report-layout">
+          <aside class="report-list-col">
+            <div class="report-search"><input type="text" id="report-search" placeholder="搜索报告标题、正文…"></div>
+            <div id="report-list" class="report-list"></div>
+          </aside>
+          <div class="report-main">
+            <div class="report-toolbar">
+              <button id="report-del-btn" class="icon-btn hidden" title="删除本版" aria-label="删除本版">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/>
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                  <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+                </svg>
+              </button>
+              <button id="export-btn" class="icon-btn plain" style="margin-left: auto;" title="导出报告" aria-label="导出报告">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/>
+                </svg>
+              </button>
+            </div>
+            <div class="report-subtabs">
+              <button class="tab active" data-report-sub="body">正文</button>
+              <button class="tab" data-report-sub="material">素材</button>
+            </div>
+            <div id="report-body-pane">
+              <div id="report-title-bar" class="report-title-bar hidden">
+                <h2 id="report-title-text"></h2>
+                <button id="report-title-edit-btn" class="icon-btn plain" title="编辑名称" aria-label="编辑名称">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                  </svg>
+                </button>
+                <button id="report-title-ai-btn" class="icon-btn plain" title="AI 重新命名" aria-label="AI 重新命名">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z"/>
+                    <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9Z"/>
+                  </svg>
+                </button>
+              </div>
+              <div id="report-content"></div>
+            </div>
+            <div id="report-material-pane" class="hidden">
+              <div id="report-meta-wrap" class="report-meta-wrap hidden">
+                <div class="report-meta-bar"><span id="report-meta-text"></span></div>
+                <details id="report-history-details" class="report-history">
+                  <summary>会话履历</summary>
+                  <div id="report-history-list" class="report-history-list"></div>
+                </details>
+                <details id="report-prompt-details" class="report-history hidden">
+                  <summary>本次生成要求</summary>
+                  <div id="report-prompt-text" class="report-prompt-text"></div>
+                </details>
+              </div>
+              <div id="report-material-empty" class="pane-empty hidden">暂无素材。生成报告后可在此查看素材来源、会话履历和生成要求。</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-chat" class="tab-pane hidden">
         <div id="chat-notice" class="chat-notice hidden">该邮箱暂无进行中的会话。<button id="chat-resume-btn" class="btn-primary">用已抓取的邮件恢复对话</button></div>
         <div id="chat-area" class="chat-wrap hidden">
           <div class="session-bar">
@@ -1452,6 +1558,28 @@
   </div>
 </div>
 
+<div id="import-modal-mask" class="modal-mask hidden">
+  <div class="modal import-modal">
+    <div class="modal-head">
+      <h3>导入邮件</h3>
+      <button class="modal-close" id="import-modal-close" title="关闭">×</button>
+    </div>
+    <div class="modal-body" style="white-space: normal;">
+      <div id="import-stage-preview">
+        <p class="profile-hint" id="import-hint"></p>
+        <div id="import-groups"></div>
+        <div id="import-fail-list"></div>
+      </div>
+      <div id="import-stage-result" class="hidden"></div>
+    </div>
+    <div class="import-footer">
+      <button id="import-cancel-btn" class="btn-ghost">取消</button>
+      <button id="import-start-btn" class="btn-primary">开始导入</button>
+    </div>
+  </div>
+</div>
+<input type="file" id="import-file-input" class="hidden" multiple accept=".eml,.zip">
+
 <script>
 "use strict";
 
@@ -1479,7 +1607,7 @@ const el = {
   dlgInput: $("dlg-input"), dlgOk: $("dlg-ok"), dlgCancel: $("dlg-cancel"),
   emptyState: $("empty-state"), workspace: $("workspace"),
   wsTarget: $("ws-target"), wsChips: $("ws-chips"),
-  reanalyzeBtn: $("reanalyze-btn"), resetBtn: $("reset-btn"), exportBtn: $("export-btn"),
+  resetBtn: $("reset-btn"), exportBtn: $("export-btn"),
   tabs: document.querySelectorAll("#tabs .tab"),
   sidebar: $("sidebar"), drawerMask: $("drawer-mask"),
   drawerOpenBtn: $("drawer-open-btn"),
@@ -1489,7 +1617,8 @@ const el = {
   },
   overviewPane: $("tab-overview"), monitorPane: $("tab-monitor"),
   navOverview: $("nav-overview"), navMonitor: $("nav-monitor"),
-  reportContent: $("report-content"), reportVersion: $("report-version"),
+  reportContent: $("report-content"),
+  reportList: $("report-list"), reportSearch: $("report-search"),
   newReportBtn: $("new-report-btn"),
   reportDelBtn: $("report-del-btn"),
   reportSubtabs: document.querySelectorAll(".report-subtabs .tab"),
@@ -1497,6 +1626,8 @@ const el = {
   reportMaterialPane: $("report-material-pane"),
   reportMaterialEmpty: $("report-material-empty"),
   reportMetaWrap: $("report-meta-wrap"), reportMetaText: $("report-meta-text"),
+  reportTitleBar: $("report-title-bar"), reportTitleText: $("report-title-text"),
+  reportTitleEditBtn: $("report-title-edit-btn"), reportTitleAiBtn: $("report-title-ai-btn"),
   reportHistoryDetails: $("report-history-details"),
   reportHistoryList: $("report-history-list"),
   reportPromptDetails: $("report-prompt-details"),
@@ -1574,6 +1705,17 @@ const el = {
   contactDeleteBtn: $("contact-delete-btn"),
   contactCancelBtn: $("contact-cancel-btn"),
   contactSaveBtn: $("contact-save-btn"),
+  navImport: $("nav-import"),
+  importFileInput: $("import-file-input"),
+  importModalMask: $("import-modal-mask"),
+  importModalClose: $("import-modal-close"),
+  importHint: $("import-hint"),
+  importGroups: $("import-groups"),
+  importFailList: $("import-fail-list"),
+  importStagePreview: $("import-stage-preview"),
+  importStageResult: $("import-stage-result"),
+  importCancelBtn: $("import-cancel-btn"),
+  importStartBtn: $("import-start-btn"),
 };
 
 const MAIL_PAGE_SIZE = 50;
@@ -1582,10 +1724,11 @@ const state = {
   me: null,           // 当前登录用户 {username, role}
   target: null,
   targets: [],
-  tab: "chat",
+  tab: "emails",
   targetName: "",
   reports: null,      // 当前目标的报告版本列表 [{version, time, content}]
   currentVersion: null, // 当前选中的报告版本号
+  reportQuery: "",    // 报告列表搜索关键词
   emails: null,       // 当前目标的邮件列表缓存
   checked: new Set(), // 往来邮件勾选的邮件 idx 集合
   searchHits: null,   // 关键词全文搜索命中的 idx 集合（null = 未搜索）
@@ -1596,13 +1739,11 @@ const state = {
   analyzing: false,
   analyzeStart: 0,
   analyzeJobId: null,
-  fetchJobId: null,
-  fetchTimer: null,
+  fetchJobs: {},     // 各联系人的「同步新邮件」任务 { [target]: { jobId, timer } }，支持并行
   mailPage: 0,
   mailView: "list", // 往来邮件视图：list = 时间列表，threads = 主题线程
   threads: null,    // 主题线程列表缓存（/api/threads），目标或邮件变化后失效
   openThread: null, // 主题视图中已钻取进入的线程（null = 主题列表页）
-  fetching: false,    // 「同步新邮件」任务进行中
   pollTimer: null,
   chatWaiting: false,
   chatAbort: null,
@@ -1627,6 +1768,19 @@ function targetKey() {
 
 async function fetchJson(url, options) {
   const resp = await fetch(url, options);
+  const contentType = resp.headers.get("Content-Type") || "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(`服务异常（HTTP ${resp.status}），请稍后重试或联系管理员`);
+  }
+  const data = await resp.json();
+  if (resp.status === 401 && url !== "/api/login") showLogin("登录已过期，请重新登录");
+  return { ok: resp.ok, status: resp.status, data };
+}
+
+// 文件上传：multipart/form-data（FormData 由浏览器自动生成带 boundary 的 Content-Type，
+// 不要手动设置）；返回结构与 401 处理和 fetchJson 一致
+async function uploadForm(url, formData) {
+  const resp = await fetch(url, { method: "POST", body: formData });
   const contentType = resp.headers.get("Content-Type") || "";
   if (!contentType.includes("application/json")) {
     throw new Error(`服务异常（HTTP ${resp.status}），请稍后重试或联系管理员`);
@@ -1802,7 +1956,7 @@ function fmtShort(iso) {
 
 function showLogin(msg) {
   if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
-  if (state.fetchTimer) { clearInterval(state.fetchTimer); state.fetchTimer = null; }
+  for (const t of Object.keys(state.fetchJobs)) clearFetchJob(t); // 停掉所有联系人的同步轮询
   if (state.monitorTimer) { clearInterval(state.monitorTimer); state.monitorTimer = null; }
   state.me = null;
   state.target = null;
@@ -2315,6 +2469,18 @@ function buildTargetItem(t, contact) {
     edit.innerHTML = PENCIL_SVG;
     edit.addEventListener("click", (e) => { e.stopPropagation(); openContactDialog(contact); });
     row1.appendChild(edit);
+  } else {
+    // 未建档目标：悬停显现「建档」按钮，打开预填地址与显示名的新建对话框
+    const reg = document.createElement("button");
+    reg.className = "target-register";
+    reg.title = "建档为联系人";
+    reg.setAttribute("aria-label", "建档为联系人");
+    reg.innerHTML = USER_PLUS_SVG;
+    reg.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openContactDialog(null, { name: t.name || "", addr: t.target });
+    });
+    row1.appendChild(reg);
   }
 
   const title = (contact && contact.title) || t.title || "";
@@ -2363,6 +2529,8 @@ async function selectTarget(target, opts) {
   state.target = target;
   state.reports = null;
   state.currentVersion = null;
+  state.reportQuery = "";
+  el.reportSearch.value = "";
   state.emails = null;
   state.mailPage = 0;
   state.searchHits = null;
@@ -2373,6 +2541,7 @@ async function selectTarget(target, opts) {
   el.mailDateTo.value = "";
   refreshMailMoreState();
   setMailMoreOpen(false);
+  syncFetchBtn(); // 同步按钮状态跟随当前联系人（别的联系人在同步不影响这里）
   localStorage.setItem(targetKey(), target);
 
   const info = state.targets.find((t) => t.target === target);
@@ -2389,7 +2558,7 @@ async function selectTarget(target, opts) {
   showError("");
   closeDrawer(); // 移动端选中目标后收起抽屉
 
-  if (!opts.keepTab) switchTab("chat");
+  if (!opts.keepTab) switchTab("emails");
 
   await Promise.all([loadReports(), loadEmails(), loadConversation(), loadSessions()]);
   renderReport();
@@ -2494,20 +2663,117 @@ async function loadReports() {
     if (!versions.includes(state.currentVersion)) {
       state.currentVersion = versions.length ? versions[versions.length - 1] : null;
     }
+    backfillReportTitles(); // 旧报告没有名称时，后台逐版补 AI 命名
   } catch (e) {
     state.reports = [];
     showError("报告版本加载失败：" + e.message);
   }
 }
 
+// 报告显示名：优先已存名称（AI 总结或用户编辑），否则取正文首个非标题行回退
+const TITLE_PUNCT = "，。、；：！？…,.;:!?";
+function fallbackReportTitle(content) {
+  for (const raw of String(content || "").split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    let text = line.replace(/^[-*+]\s*/, "").replace(/\*\*/g, "").trim();
+    if (text.length > 15) {
+      text = text.slice(0, 15);
+      // 截断停在半句时回退到最后一个标点前，避免结尾残缺
+      const cut = Math.max(...[...TITLE_PUNCT].map((c) => text.lastIndexOf(c)));
+      if (cut >= 6) text = text.slice(0, cut);
+    }
+    text = text.replace(new RegExp("[" + TITLE_PUNCT + " 、]+$"), "");
+    if (text) return text;
+  }
+  return "（未命名）";
+}
+
+function reportTitleOf(r) {
+  return String(r.title || "").trim() || fallbackReportTitle(r.content);
+}
+
+// 保存某版报告名称：传 title 为用户编辑；不传则由后端 AI 总结
+async function saveReportTitle(version, title) {
+  const { ok, data } = await fetchJson("/api/report/title", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ target: state.target, version, title }),
+  });
+  if (!ok) throw new Error(data.error || "保存失败");
+  return data.title;
+}
+
+// 旧报告（无名称字段）加载后逐版请求 AI 命名；服务端会落库，刷新后不再重复。
+// 每轮循环重查当前目标，切换联系人后自动接着补新目标的
+let reportTitleBackfilling = false;
+async function backfillReportTitles() {
+  if (reportTitleBackfilling) return;
+  reportTitleBackfilling = true;
+  try {
+    while (state.target) {
+      const r = (state.reports || []).find((x) => !String(x.title || "").trim());
+      if (!r) break;
+      try {
+        r.title = await saveReportTitle(r.version);
+        renderReport();
+      } catch (e) { break; } // 命名失败就停，避免反复请求
+    }
+  } finally {
+    reportTitleBackfilling = false;
+  }
+}
+
+// 左侧报告列表：按版本倒序，支持按标题/正文/版本号搜索
+function renderReportList() {
+  const reports = state.reports || [];
+  const q = state.reportQuery.trim().toLowerCase();
+  el.reportList.innerHTML = "";
+  const items = [...reports].sort((a, b) => b.version - a.version)
+    .filter((r) => !q
+      || reportTitleOf(r).toLowerCase().includes(q)
+      || String(r.content || "").toLowerCase().includes(q)
+      || ("v" + r.version) === q);
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "report-list-empty";
+    empty.textContent = reports.length ? "没有匹配的报告" : "暂无报告";
+    el.reportList.appendChild(empty);
+    return;
+  }
+  for (const r of items) {
+    const item = document.createElement("div");
+    item.className = "report-item" + (r.version === state.currentVersion ? " active" : "");
+    const title = document.createElement("div");
+    title.className = "r-title" + (String(r.title || "").trim() ? "" : " untitled");
+    title.textContent = reportTitleOf(r);
+    const meta = document.createElement("div");
+    meta.className = "r-meta";
+    meta.textContent = `v${r.version} · ${fmtShort(r.time)}`;
+    item.appendChild(title);
+    item.appendChild(meta);
+    item.addEventListener("click", () => {
+      if (state.currentVersion === r.version) return;
+      state.currentVersion = r.version;
+      renderReport();
+    });
+    el.reportList.appendChild(item);
+  }
+}
+
+el.reportSearch.addEventListener("input", () => {
+  state.reportQuery = el.reportSearch.value;
+  renderReportList();
+});
+
 function renderReport() {
   const reports = state.reports || [];
-  el.reportVersion.innerHTML = "";
-  el.reportVersion.classList.toggle("hidden", !reports.length);
   el.reportDelBtn.classList.toggle("hidden", !reports.length);
   syncReportBtns();
+  renderReportList();
   el.reportContent.innerHTML = "";
   if (!reports.length) {
+    el.reportTitleBar.classList.add("hidden");
     el.reportMetaWrap.classList.add("hidden");
     el.reportMaterialEmpty.classList.remove("hidden");
     const div = document.createElement("div");
@@ -2517,19 +2783,59 @@ function renderReport() {
     return;
   }
   el.reportMaterialEmpty.classList.add("hidden");
-  for (const r of reports) {
-    const opt = document.createElement("option");
-    opt.value = String(r.version);
-    opt.textContent = `v${r.version} · ${fmtShort(r.time)}`;
-    el.reportVersion.appendChild(opt);
-  }
-  el.reportVersion.value = String(state.currentVersion);
   const current = reports.find((r) => r.version === state.currentVersion) || reports[reports.length - 1];
+  renderReportTitle(current);
   renderReportMeta(current);
   const div = document.createElement("div");
   renderMarkdown(div, current.content);
   el.reportContent.appendChild(div);
 }
+
+// 名称未落库（AI 命名中/失败）时以灰色展示本地回退名
+function renderReportTitle(report) {
+  el.reportTitleBar.classList.remove("hidden");
+  const named = !!String(report.title || "").trim();
+  el.reportTitleText.textContent = reportTitleOf(report);
+  el.reportTitleText.classList.toggle("untitled", !named);
+}
+
+function currentReport() {
+  const reports = state.reports || [];
+  return reports.find((r) => r.version === state.currentVersion)
+    || reports[reports.length - 1];
+}
+
+el.reportTitleEditBtn.addEventListener("click", async () => {
+  const r = currentReport();
+  if (!r) return;
+  const name = await showDialog({
+    title: "编辑报告名称", confirmText: "保存",
+    body: `修改 v${r.version} 的名称（建议不超过 15 字）：`,
+    input: { type: "text", placeholder: reportTitleOf(r) },
+  });
+  if (name === null) return;
+  const trimmed = name.trim().slice(0, 50);
+  if (!trimmed) return;
+  try {
+    r.title = await saveReportTitle(r.version, trimmed);
+    renderReport();
+  } catch (e) { toast(e.message, true); }
+});
+
+el.reportTitleAiBtn.addEventListener("click", async () => {
+  const r = currentReport();
+  if (!r) return;
+  el.reportTitleAiBtn.disabled = true;
+  try {
+    r.title = await saveReportTitle(r.version); // 不传 title，后端 AI 总结
+    renderReport();
+    toast(`已命名为「${r.title}」`);
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    el.reportTitleAiBtn.disabled = false;
+  }
+});
 
 function renderReportMeta(report) {
   const meta = report.meta;
@@ -2566,11 +2872,6 @@ function renderReportMeta(report) {
     appendCollapsibleMsg(el.reportHistoryList, m.role, m.content);
   }
 }
-
-el.reportVersion.addEventListener("change", () => {
-  state.currentVersion = Number(el.reportVersion.value);
-  renderReport();
-});
 
 // 报告页内「正文 / 素材」子页签
 el.reportSubtabs.forEach((btn) => {
@@ -3066,72 +3367,112 @@ el.sessionBtn.addEventListener("click", async () => {
   }
 });
 
-// ---------- 同步新邮件（增量抓取，不动现有会话） ----------
+// ---------- 同步新邮件 ----------
+// 增量抓取新邮件；拉到新邮件且目标已有会话时，后端自动以最新往来重建会话
+// （旧对话归档到会话列表，可随时切回），因此不再需要单独的
+// 「重新抓取并分析」入口。同步任务按联系人各自独立
+// （state.fetchJobs[target] = { jobId, timer }）：
+// 按钮只反映当前联系人的同步状态，切走后轮询继续在后台跑，多个联系人可并行同步
 
-function finishFetch(err, data) {
-  state.fetching = false;
-  state.fetchJobId = null;
-  el.fetchBtn.disabled = false;
-  el.fetchBtn.textContent = "同步新邮件";
-  if (err) { showError(err); return; }
-  toast(data.new ? `新增 ${data.new} 封，共 ${data.count} 封` : `没有新邮件，共 ${data.count} 封`);
+function fetchJob(target) { return state.fetchJobs[target] || null; }
+
+function targetLabel(target) {
+  const info = state.targets.find((t) => t.target === target);
+  return info && info.name ? `${info.name}（${target}）` : target;
 }
 
-function pollFetchJob(jobId) {
-  state.fetchTimer = setInterval(async () => {
+// 按钮状态跟随当前联系人的同步任务（切到没在同步的联系人 = 显示「同步新邮件」）
+function syncFetchBtn() {
+  el.fetchBtn.disabled = false;
+  el.fetchBtn.textContent = state.target && fetchJob(state.target) ? "取消同步" : "同步新邮件";
+}
+
+// 停掉某联系人的轮询并从任务表移除（不发取消请求，调用方按需另发）
+function clearFetchJob(target) {
+  const entry = fetchJob(target);
+  if (!entry) return;
+  if (entry.timer) { clearInterval(entry.timer); entry.timer = null; }
+  delete state.fetchJobs[target];
+  syncFetchBtn();
+}
+
+function finishFetchJob(target, err, data) {
+  clearFetchJob(target);
+  if (err) {
+    if (state.target === target) showError(err);
+    else toast(`${targetLabel(target)}：同步失败（${err}）`, true);
+    return;
+  }
+  let msg = data.new ? `新增 ${data.new} 封，共 ${data.count} 封` : `没有新邮件，共 ${data.count} 封`;
+  if (data.new && data.session_rebuilt) msg += "，已重建会话（旧对话在会话列表）";
+  // 正看着这个联系人就只报结果；在别的联系人页收到完成提示时带上联系人名
+  toast(state.target === target ? msg : `${targetLabel(target)}：${msg}`);
+}
+
+function pollFetchJob(target, jobId) {
+  const entry = fetchJob(target);
+  if (!entry) return;
+  entry.timer = setInterval(async () => {
     try {
       const { ok, data } = await fetchJson("/api/jobs/" + jobId);
-      if (!ok) { clearInterval(state.fetchTimer); state.fetchTimer = null; finishFetch(data.error || "任务查询失败"); return; }
+      if (!ok) { finishFetchJob(target, data.error || "任务查询失败"); return; }
       if (data.status === "cancelled") {
-        clearInterval(state.fetchTimer); state.fetchTimer = null;
-        state.fetching = false;
-        state.fetchJobId = null;
-        el.fetchBtn.textContent = "同步新邮件";
+        clearFetchJob(target);
+        if (state.target === target) toast("已取消同步");
         return;
       }
       if (data.status === "done") {
-        clearInterval(state.fetchTimer); state.fetchTimer = null;
-        await loadEmails(); // 勾选按现有逻辑重置为全选
+        clearFetchJob(target);
+        if (state.target === target) {
+          await loadEmails(); // 勾选按现有逻辑重置为全选
+          if (data.session_rebuilt) {
+            // 后端已用最新邮件重建会话：聊天窗切到新的活跃会话（旧对话可从会话列表切回）
+            state.hasSession = true;
+            await Promise.all([loadConversation(), loadSessions()]);
+            renderChatEntry();
+          }
+        }
         loadTargets();
-        finishFetch(null, data);
+        finishFetchJob(target, null, data);
       } else if (data.status === "error") {
-        clearInterval(state.fetchTimer); state.fetchTimer = null;
-        finishFetch(data.error || "同步新邮件失败");
+        finishFetchJob(target, data.error || "同步新邮件失败");
       }
     } catch (e) {
-      clearInterval(state.fetchTimer); state.fetchTimer = null;
-      finishFetch(e.message);
+      finishFetchJob(target, e.message);
     }
   }, 2000);
 }
 
 el.fetchBtn.addEventListener("click", async () => {
   if (!state.target) return;
-  if (state.fetching) {
-    // 同步进行中再次点击 = 取消
-    const jobId = state.fetchJobId;
-    if (state.fetchTimer) { clearInterval(state.fetchTimer); state.fetchTimer = null; }
-    state.fetchJobId = null;
-    state.fetching = false;
-    el.fetchBtn.textContent = "同步新邮件";
+  const target = state.target;
+  const entry = fetchJob(target);
+  if (entry) {
+    // 当前联系人同步进行中再次点击 = 取消
+    const jobId = entry.jobId;
+    clearFetchJob(target);
     toast("已取消同步");
     if (jobId) { try { await fetchJson("/api/jobs/" + jobId + "/cancel", { method: "POST" }); } catch (e) { /* 忽略 */ } }
     return;
   }
-  state.fetching = true;
-  el.fetchBtn.textContent = "取消同步";
   showError("");
+  // 先占位再请求：请求期间按钮已变为「取消同步」，避免连点发起重复任务
+  state.fetchJobs[target] = { jobId: null, timer: null };
+  syncFetchBtn();
   try {
     const { ok, data } = await fetchJson("/api/fetch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ target: state.target }),
+      body: JSON.stringify({ target }),
     });
-    if (!ok) { finishFetch(data.error || "同步新邮件失败"); return; }
-    state.fetchJobId = data.job_id;
-    pollFetchJob(data.job_id);
+    if (!ok) { clearFetchJob(target); showError(data.error || "同步新邮件失败"); return; }
+    const cur = fetchJob(target);
+    if (!cur) return; // 等待期间被取消就不再轮询
+    cur.jobId = data.job_id;
+    pollFetchJob(target, data.job_id);
   } catch (e) {
-    finishFetch(e.message);
+    clearFetchJob(target);
+    showError(e.message);
   }
 });
 
@@ -3563,7 +3904,8 @@ function appendSaveReport(bubble, content) {
       });
       if (!ok) { showError(data.error || "保存报告失败"); btn.disabled = false; return; }
       btn.textContent = `已存为 v${data.version}`;
-      toast(`已保存为报告 v${data.version}`);
+      toast(data.title ? `已保存为报告 v${data.version}「${data.title}」`
+                       : `已保存为报告 v${data.version}`);
       await loadReports();
     } catch (e) {
       showError(e.message);
@@ -3842,10 +4184,9 @@ function pollJob(jobId, email) {
         setAnalyzing(false);
         const target = data.target || email;
         await loadTargets();
-        await selectTarget(target);
+        await selectTarget(target); // selectTarget 默认落在「往来邮件」页
         await loadReports();
         renderReport();
-        switchTab("chat");
       } else if (data.status === "error") {
         finishWithError(data.error || "分析失败");
       }
@@ -3911,13 +4252,6 @@ document.addEventListener("click", () => el.moreMenu.classList.add("hidden"));
 el.errorClose.addEventListener("click", () => showError(""));
 
 // ---------- 工作区操作 ----------
-
-el.reanalyzeBtn.addEventListener("click", async () => {
-  if (!state.target) return;
-  if (state.hasSession &&
-      !await showDialog({ title: "重新抓取并分析", body: `将重新抓取与 ${state.target} 的往来邮件，并清空当前对话上下文。继续吗？`, confirmText: "继续" })) return;
-  startAnalyze(state.target);
-});
 
 el.resetBtn.addEventListener("click", async () => {
   if (!state.target) return;
@@ -4374,6 +4708,7 @@ el.profileWecomTestBtn.addEventListener("click", async () => {
 
 // 编辑铅笔 / 垃圾桶（单色 currentColor，与 report-del 同款垃圾桶）
 const PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
+const USER_PLUS_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>';
 const TRASH_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
 const CONTACT_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CONTACT_MAX_ADDR = 10;
@@ -4497,18 +4832,20 @@ function addAddrRow(value, isPrimary, disabled) {
   return input;
 }
 
-// 打开联系人对话框：contact 为 null 时新建（单个空地址行）
-function openContactDialog(contact) {
+// 打开联系人对话框：contact 为 null 时新建；prefill 可预填显示名与主地址
+// （未建档目标的「建档」入口：{name, addr}）
+function openContactDialog(contact, prefill) {
   state.editingContact = contact || null;
   el.contactModalTitle.textContent = contact ? "编辑联系人" : "添加联系人";
   el.contactError.classList.add("hidden");
-  el.contactName.value = contact ? contact.name || "" : "";
+  el.contactName.value = contact ? contact.name || "" : (prefill && prefill.name) || "";
   el.contactTitle.value = contact ? contact.title || "" : "";
   el.contactNote.value = contact ? contact.note || "" : "";
   el.contactCompanyNew.value = "";
   renderCompanyOptions(contact ? contact.company_id || "" : "");
   el.contactAddrList.innerHTML = "";
-  const addrs = contact ? (contact.addresses || [contact.key]).slice() : [""];
+  const addrs = contact ? (contact.addresses || [contact.key]).slice()
+                        : [(prefill && prefill.addr) || ""];
   addrs.forEach((a, i) => addAddrRow(a, i === 0, !!contact && i === 0));
   el.contactDeleteBtn.classList.toggle("hidden", !contact);
   el.contactSaveBtn.disabled = false;
@@ -4645,6 +4982,7 @@ const RISK_MAP = {
   high: ["高风险", "alert"],
   mid: ["需关注", "warn"],
   ok: ["健康", "out"],
+  insufficient: ["数据不足", "warn"],
 };
 
 // 进入客户全景才加载（懒加载，不自动轮询）；响应有 60 秒服务端缓存
@@ -4734,12 +5072,17 @@ function renderOverview(contacts, generatedAt) {
     const tr = document.createElement("tr");
     tr.title = "单击展开评分依据，双击打开该联系人";
 
-    // 健康度：分数 + 风险徽章
+    // 健康度：分数 + 风险徽章；数据不足时分数不可信，显示「—」+ 数据不足徽章
     const tdHealth = document.createElement("td");
     tdHealth.style.whiteSpace = "nowrap";
     const score = document.createElement("span");
     score.className = "health-score";
-    score.textContent = c.health;
+    if (c.risk === "insufficient") {
+      score.textContent = "—";
+      score.style.color = "var(--text-3)";
+    } else {
+      score.textContent = c.health;
+    }
     const [riskLabel, riskCls] = RISK_MAP[c.risk] || [c.risk, "dismissed"];
     const riskBadge = document.createElement("span");
     riskBadge.className = "badge " + riskCls;
@@ -4777,12 +5120,6 @@ function renderOverview(contacts, generatedAt) {
       const b = document.createElement("span");
       b.className = "badge warn";
       b.textContent = "语气恶化";
-      statusBox.appendChild(b);
-    }
-    if (c.data_limited) {
-      const b = document.createElement("span");
-      b.className = "badge warn";
-      b.textContent = "数据不足";
       statusBox.appendChild(b);
     }
     if (!statusBox.children.length) {
@@ -4840,11 +5177,11 @@ function renderOverview(contacts, generatedAt) {
       none.textContent = "暂无风险项";
       tdDetail.appendChild(none);
     }
-    // 信息卡覆盖率小字；数据不足时注明信号未完整纳入
+    // AI 分析覆盖率小字（语气/承诺信号的来源）
     const coverage = document.createElement("div");
     coverage.className = "overview-span";
-    coverage.textContent = `信息卡覆盖率：${Math.round((c.card_coverage || 0) * 100)}%` +
-      (c.data_limited ? "——语气与承诺信号未完整纳入，建议先对该客户运行一次分析" : "");
+    coverage.textContent = `AI 分析覆盖率：${Math.round((c.card_coverage || 0) * 100)}% 的对方来信` +
+      (c.data_limited ? "（过低，故不给出健康度评分）" : "");
     tdDetail.appendChild(coverage);
     const span = document.createElement("div");
     span.className = "overview-span";
@@ -4960,6 +5297,291 @@ function renderDrafts(data) {
     card.append(head, body);
     wrap.appendChild(card);
   }
+}
+
+// ---------- 导入邮件（.eml / .zip 文件导入） ----------
+
+let importFiles = null;  // 当前批次的 File 数组，仅作预览期间的过期响应判据；预览成功即清空（后端已暂存，导入凭 import_id）
+let importId = null;     // 预览返回的导入会话句柄，POST /api/import 的凭据；过期（409）需重新上传
+let importBusy = false;  // 正式导入进行中（含后台任务轮询），期间禁止关闭弹窗与重复提交
+
+el.navImport.addEventListener("click", () => {
+  closeDrawer(); // 移动端抽屉里点击时先收起抽屉，避免盖住弹层
+  el.importFileInput.value = ""; // 清空后再次选择同一批文件也能触发 change
+  el.importFileInput.click();
+});
+
+el.importFileInput.addEventListener("change", () => {
+  const files = [...el.importFileInput.files];
+  if (!files.length) return;
+  const bad = files.filter((f) => !/\.(eml|zip)$/i.test(f.name));
+  if (bad.length) {
+    el.importFileInput.value = "";
+    toast(`仅支持 .eml 或 .zip 文件：${bad[0].name}${bad.length > 1 ? ` 等 ${bad.length} 个` : ""}`, true);
+    return;
+  }
+  importFiles = files;
+  openImportModal();
+  previewImport(files);
+});
+
+function openImportModal() {
+  importId = null; // 上一批的导入会话句柄作废，等本次预览成功后写入
+  el.importStagePreview.classList.remove("hidden");
+  el.importStageResult.classList.add("hidden");
+  el.importHint.textContent = `正在解析 ${importFiles.length} 个文件…`;
+  el.importGroups.innerHTML = "";
+  el.importFailList.innerHTML = "";
+  el.importStartBtn.classList.remove("hidden");
+  el.importStartBtn.disabled = true;
+  el.importStartBtn.textContent = "开始导入";
+  el.importCancelBtn.disabled = false;
+  el.importCancelBtn.textContent = "取消";
+  el.importModalMask.classList.remove("hidden");
+}
+
+function closeImportModal(force) {
+  if (importBusy && !force) { toast("正在导入，请稍候", true); return; }
+  el.importModalMask.classList.add("hidden");
+  importFiles = null;
+  importId = null;
+  el.importFileInput.value = "";
+}
+
+el.importModalClose.addEventListener("click", () => closeImportModal());
+el.importCancelBtn.addEventListener("click", () => closeImportModal());
+el.importModalMask.addEventListener("click", (e) => {
+  if (e.target === el.importModalMask) closeImportModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !el.importModalMask.classList.contains("hidden")) closeImportModal();
+});
+
+// 预览：解析上传文件并按往来对象分组展示，勾选决定要导入哪些联系人
+async function previewImport(files) {
+  const fd = new FormData();
+  for (const f of files) fd.append("files", f);
+  try {
+    const { ok, status, data } = await uploadForm("/api/import/preview", fd);
+    if (importFiles !== files) return; // 弹窗已关闭或重新选择过文件，丢弃过期响应
+    if (status === 401) { closeImportModal(true); return; }
+    if (!ok) {
+      toast(data.error || "解析失败", true);
+      closeImportModal(true);
+      return;
+    }
+    importId = data.import_id; // 后端已暂存本批文件，正式导入凭此句柄指定分组即可
+    importFiles = null;        // 预览完成，释放 File 引用（正式导入无需再上传）
+    renderImportPreview(data);
+  } catch (e) {
+    if (importFiles !== files) return;
+    toast(e.message, true);
+    closeImportModal(true);
+  }
+}
+
+function renderImportPreview(data) {
+  const groups = data.groups || [];
+  const failures = data.failures || [];
+  const total = groups.reduce((s, g) => s + (g.count || 0), 0);
+  const parts = [];
+  if (groups.length) {
+    parts.push(`识别出 ${groups.length} 位联系人、共 ${total} 封邮件`);
+    if (data.own_addr) parts.push(`以 ${data.own_addr} 为本人地址判定收发方向`);
+    parts.push("勾选要导入的联系人");
+  } else {
+    parts.push("没有识别出可导入的邮件分组");
+  }
+  if (failures.length) parts.push(`${failures.length} 个文件无法解析`);
+  el.importHint.textContent = parts.join("，") + "。";
+  for (const g of groups) el.importGroups.appendChild(buildImportGroup(g));
+  appendImportFailures(el.importFailList, failures, "以下文件无法解析，将不会导入");
+  syncImportStartBtn();
+}
+
+// 分组行：复选框（默认勾选）+ 联系人名（name 非空时括号附 key）+ 封数/日期范围 + 主题样例
+function buildImportGroup(g) {
+  const row = document.createElement("label");
+  row.className = "import-group";
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = true;
+  cb.dataset.key = g.key;
+  cb.addEventListener("change", syncImportStartBtn);
+  const main = document.createElement("div");
+  main.className = "import-group-main";
+  const title = document.createElement("div");
+  title.className = "import-group-title";
+  title.textContent = g.name ? `${g.name}（${g.key}）` : g.key;
+  const meta = document.createElement("div");
+  meta.className = "import-group-meta";
+  let range = "";
+  if (g.first_date && g.last_date) {
+    range = g.first_date === g.last_date ? g.first_date : `${g.first_date} ~ ${g.last_date}`;
+  }
+  meta.textContent = `${g.count} 封` + (range ? ` · ${range}` : "");
+  main.append(title, meta);
+  const subjects = (g.subjects || []);
+  if (subjects.length) {
+    const subj = document.createElement("div");
+    subj.className = "import-group-subjects";
+    subj.textContent = "主题：" + subjects.slice(0, 3).join("、") + (subjects.length > 3 ? " …" : "");
+    subj.title = subjects.join("\n");
+    main.appendChild(subj);
+  }
+  row.append(cb, main);
+  return row;
+}
+
+// 失败文件清单：预览（分组前失败）与结果（顶层失败、组内失败）三处共用
+function appendImportFailures(container, failures, label) {
+  if (!failures || !failures.length) return;
+  const sec = document.createElement("div");
+  sec.className = "import-sec";
+  sec.textContent = `${label}（${failures.length}）：`;
+  container.appendChild(sec);
+  for (const f of failures) {
+    const item = document.createElement("div");
+    item.className = "import-fail-item";
+    item.textContent = `${f.name}：${f.error}`;
+    container.appendChild(item);
+  }
+}
+
+function syncImportStartBtn() {
+  const n = [...el.importGroups.querySelectorAll('input[type="checkbox"]')]
+    .filter((c) => c.checked).length;
+  el.importStartBtn.disabled = n === 0;
+  el.importStartBtn.textContent = n ? `开始导入（${n}）` : "开始导入";
+}
+
+// 导入后台任务轮询：复用 /api/jobs/<id> 模式（同分析/同步），约 1s 一次；
+// 返回终态 job（done/error/cancelled）。轮询请求本身网络异常允许连续失败几次（容忍抖动），超限按失败处理
+function pollImportJob(jobId) {
+  return new Promise((resolve) => {
+    let netFails = 0;
+    const timer = setInterval(async () => {
+      try {
+        const { ok, data } = await fetchJson("/api/jobs/" + jobId);
+        if (!ok) { clearInterval(timer); resolve({ status: "error", error: data.error || "任务查询失败" }); return; }
+        netFails = 0;
+        if (data.status === "running") {
+          // 文件级进度：done/total 齐全时按钮显示「正在导入… done/total」
+          el.importStartBtn.textContent = (data.done != null && data.total != null)
+            ? `正在导入… ${data.done}/${data.total}`
+            : "正在导入…";
+          return;
+        }
+        clearInterval(timer);
+        resolve(data);
+      } catch (e) {
+        netFails += 1;
+        if (netFails >= 3) { clearInterval(timer); resolve({ status: "error", error: e.message }); }
+      }
+    }, 1000);
+  });
+}
+
+el.importStartBtn.addEventListener("click", async () => {
+  if (importBusy || !importId) return;
+  const keys = [...el.importGroups.querySelectorAll('input[type="checkbox"]')]
+    .filter((c) => c.checked).map((c) => c.dataset.key);
+  if (!keys.length) return;
+  importBusy = true;
+  el.importStartBtn.disabled = true;
+  el.importStartBtn.textContent = "正在导入…";
+  el.importCancelBtn.disabled = true;
+  try {
+    // 文件已在预览时暂存到后端，这里只提交导入会话句柄与勾选的分组
+    const { ok, status, data } = await fetchJson("/api/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ import_id: importId, targets: keys }),
+    });
+    if (status === 401) { closeImportModal(true); return; }
+    if (status === 409) {
+      // 暂存的导入会话已过期/被清理：提示并关窗，让用户重新上传
+      toast(data.error || "导入会话已过期，请重新上传文件", true);
+      closeImportModal(true);
+      return;
+    }
+    if (!ok) {
+      toast(data.error || "导入失败", true);
+      syncImportStartBtn();
+      el.importCancelBtn.disabled = false;
+      return;
+    }
+    const job = await pollImportJob(data.job_id); // 轮询期间保持 importBusy，禁止关窗与重复提交
+    if (job.status === "cancelled") {
+      toast("导入已取消");
+      closeImportModal(true);
+      return;
+    }
+    if (job.status !== "done") {
+      toast(job.error || "导入失败", true);
+      syncImportStartBtn();
+      el.importCancelBtn.disabled = false;
+      return;
+    }
+    const result = { results: job.results || [], failures: job.failures || [] };
+    const results = result.results;
+    toast(`导入完成：新增 ${results.reduce((s, r) => s + (r.new || 0), 0)} 封，` +
+          `重复跳过 ${results.reduce((s, r) => s + (r.duplicates || 0), 0)} 封`);
+    await loadTargets();
+    // 当前正打开的联系人也在导入结果里时，就地刷新其邮件列表与会话（同「同步新邮件」完成路径）
+    const hit = results.find((r) => r.key === state.target);
+    if (state.target && hit) {
+      await loadEmails();
+      if (hit.session_rebuilt) {
+        state.hasSession = true;
+        await Promise.all([loadConversation(), loadSessions()]);
+        renderChatEntry();
+      }
+    }
+    renderImportResult(result); // 刷新完成后再切换到结果页，保证弹窗可立即关闭
+  } catch (e) {
+    toast(e.message, true);
+    syncImportStartBtn();
+    el.importCancelBtn.disabled = false;
+  } finally {
+    importBusy = false;
+  }
+});
+
+function renderImportResult(data) {
+  const results = data.results || [];
+  el.importStagePreview.classList.add("hidden");
+  const pane = el.importStageResult;
+  pane.classList.remove("hidden");
+  pane.innerHTML = "";
+  const sec = document.createElement("div");
+  sec.className = "import-sec";
+  sec.textContent = `导入完成（${results.length} 位联系人）`;
+  pane.appendChild(sec);
+  if (!results.length) {
+    const empty = document.createElement("div");
+    empty.className = "pane-empty";
+    empty.textContent = "没有可展示的导入结果";
+    pane.appendChild(empty);
+  }
+  for (const r of results) {
+    const row = document.createElement("div");
+    row.className = "import-result-row";
+    const title = document.createElement("div");
+    title.className = "ir-title";
+    title.textContent = r.name ? `${r.name}（${r.key}）` : r.key;
+    const detail = document.createElement("div");
+    detail.className = "ir-detail";
+    detail.textContent = `新增 ${r.new} 封，重复跳过 ${r.duplicates} 封` +
+      (r.session_rebuilt ? " · 会话已重建" : "");
+    row.append(title, detail);
+    appendImportFailures(row, r.failures, "该联系人未导入的文件");
+    pane.appendChild(row);
+  }
+  appendImportFailures(pane, data.failures, "以下文件未能导入");
+  el.importStartBtn.classList.add("hidden");
+  el.importCancelBtn.disabled = false;
+  el.importCancelBtn.textContent = "关闭";
 }
 
 // ---------- 启动 ----------

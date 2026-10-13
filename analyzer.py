@@ -184,6 +184,22 @@ _TITLE_INSTRUCTION = (
     "只输出标题本身，不要引号、书名号、结尾标点或任何解释。"
 )
 
+# 报告落库后用 AI 总结语义化名称（报告列表里区分各版针对的主题）
+_REPORT_TITLE_INSTRUCTION = (
+    "请为下面的分析报告起一个简短的中文标题（不超过 15 个字），"
+    "概括报告的核心主题。只输出标题本身，不要引号、书名号、结尾标点或任何解释。"
+)
+
+
+def ai_report_title(llm, content: str) -> str:
+    """AI 总结报告名称（≤15 字）；失败或为空返回空串，由调用方自行回退。"""
+    try:
+        return llm.chat([{"role": "user", "content":
+                          _REPORT_TITLE_INSTRUCTION + "\n\n" + (content or "")[:1500]},
+                         ]).strip().strip("\"'“”‘’《》。. \n")[:15]
+    except Exception:
+        return ""
+
 
 # 追问时按问题检索相关邮件全文，拼进当轮消息的标记（get_conversation 据此剥离展示）
 _RETRIEVAL_HEAD = "【检索补充】"
@@ -443,7 +459,12 @@ class Analyzer:
         self._bind_emails(sess, emails, full_indices, cards, vectors)
         with self._lock:
             self._sessions[user] = sess
-        self._record(history.start_session, target, _INITIAL_INSTRUCTION, reply)
+        version = self._record(history.start_session, target, _INITIAL_INSTRUCTION, reply)
+        # 首份报告顺手用 AI 命名（≤15 字），报告列表里即可看出针对的主题；
+        # 命名失败静默跳过，前端回退为正文首行摘要
+        title = ai_report_title(self.card_llm, reply)
+        if title and version:
+            self._record(history.set_report_title, target, version, title)
         return reply
 
     def get_conversation(self, user: str) -> list:
@@ -702,10 +723,10 @@ class Analyzer:
                 with self._lock:
                     del sess.messages[mark:]
 
-    def _record(self, fn, target: str, *args) -> None:
+    def _record(self, fn, target: str, *args):
         if not self.history_dir:
-            return
-        fn(self.history_dir, target, *args)
+            return None
+        return fn(self.history_dir, target, *args)
 
     def _record_title(self, sess, question: str, reply: str) -> None:
         """会话块的首轮问答落库后，用 AI 总结语义化标题；失败时回退为问题前 20 字。"""

@@ -33,6 +33,11 @@ SSH 登录用户（默认 root；非 root 需可 sudo）
 .PARAMETER NoEnv
 首次部署也不上传本机 .env（自行上服务器编辑）
 
+.PARAMETER WithData
+连同本机 data/ 测试数据一起同步（emails/sessions/contacts/monitor 增量合并；
+users.json 双边合并，同名用户以本机为准，生产独有用户保留；服务器上的
+settings.json 与 .secret_key 不动，同步前自动备份到 /root/zemail-data-backup-<时间戳>.tar.gz）
+
 .PARAMETER SkipApt
 传给 deploy.sh：跳过 apt 系统依赖安装（离线环境用）
 
@@ -43,6 +48,10 @@ SSH 登录用户（默认 root；非 root 需可 sudo）
 .EXAMPLE
 .\deploy-remote.ps1 -PushEnv
 用本机 .env 覆盖服务器上的 .env（等价于 ./deploy-remote.sh --push-env）
+
+.EXAMPLE
+.\deploy-remote.ps1 -WithData
+部署并把本机测试数据同步到服务器（等价于 ./deploy-remote.sh --with-data）
 
 .EXAMPLE
 .\deploy-remote.ps1 -Server 172.16.52.12 -Port 8021 -SshUser ubuntu
@@ -60,6 +69,7 @@ param(
     [string]$ServiceUser = 'zemail',
     [switch]$PushEnv,
     [switch]$NoEnv,
+    [switch]$WithData,
     [switch]$SkipApt
 )
 
@@ -140,6 +150,73 @@ $SkipAptArg = ''
 if ($SkipApt) { $SkipAptArg = '--skip-apt' }
 Invoke-Remote "cd '$StageDir' && $SudoSpace bash deploy.sh --dir '$AppDir' --port '$Port' --user '$ServiceUser' $SkipAptArg"
 
+# ---------- 5.5 同步本机测试数据（-WithData） ----------
+$PayloadDir = $null
+if ($WithData) {
+    Write-Host '==> 同步本机测试数据到服务器...'
+    $PayloadDir = Join-Path $env:TEMP "zemail-data-$PID"
+    if (Test-Path $PayloadDir) { Remove-Item $PayloadDir -Recurse -Force }
+    New-Item -ItemType Directory -Path $PayloadDir | Out-Null
+
+    # 收集数据目录（存在才带上）
+    foreach ($d in 'emails', 'sessions', 'contacts', 'monitor') {
+        $src = Join-Path $SrcDir "data\$d"
+        if (Test-Path $src) { Copy-Item $src -Destination $PayloadDir -Recurse }
+    }
+
+    # users.json：拉取生产版本，与本机合并（同名用户以本机为准，生产独有用户保留）
+    $LocalUsersFile = Join-Path $SrcDir 'data\users.json'
+    $MergedUsersFile = $null
+    if (Test-Path $LocalUsersFile) {
+        & ssh.exe -o ConnectTimeout=8 $SshDest "test -f '$AppDir/data/users.json'"
+        $ProdText = '{}'
+        if ($LASTEXITCODE -eq 0) {
+            $ProdText = (& ssh.exe -o ConnectTimeout=8 $SshDest "$SudoSpace cat '$AppDir/data/users.json'") -join "`n"
+        }
+        try { $ProdUsers = $ProdText | ConvertFrom-Json } catch { $ProdUsers = $null }
+        if (-not $ProdUsers) { $ProdUsers = [pscustomobject]@{} }
+        $LocalUsers = Get-Content -Raw -Encoding UTF8 $LocalUsersFile | ConvertFrom-Json
+        foreach ($p in $LocalUsers.PSObject.Properties) {
+            if ($ProdUsers.PSObject.Properties[$p.Name]) {
+                $ProdUsers.PSObject.Properties[$p.Name].Value = $p.Value
+            } else {
+                $ProdUsers | Add-Member -MemberType NoteProperty -Name $p.Name -Value $p.Value
+            }
+        }
+        $MergedUsersFile = Join-Path $PayloadDir 'users.json'
+        # 必须无 BOM 写出：服务器端 Python 的 json.load 读到 BOM 会解析失败
+        [System.IO.File]::WriteAllText($MergedUsersFile, ($ProdUsers | ConvertTo-Json -Depth 6),
+            (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host ("    合并后用户: " + (($ProdUsers.PSObject.Properties.Name) -join ', '))
+    }
+
+    # 上传数据包，服务器端：备份 → 增量解包（不动 users.json）→ users.json 就位 → 归属修正
+    $PayloadTar = Join-Path $env:TEMP "zemail-data-$PID.tgz"
+    & $TarExe -czf $PayloadTar -C $PayloadDir '.'
+    if ($LASTEXITCODE -ne 0) { throw "打包数据失败（退出码 $LASTEXITCODE）" }
+    $PayloadTarName = Split-Path $PayloadTar -Leaf
+    & scp.exe -q $PayloadTar "${SshDest}:/tmp/$PayloadTarName"
+    if ($LASTEXITCODE -ne 0) { throw '上传数据包失败' }
+    Invoke-Remote "mkdir -p '$StageDir/data-payload' && tar -xzf '/tmp/$PayloadTarName' -C '$StageDir/data-payload' && rm -f '/tmp/$PayloadTarName'"
+
+    $BackupTag = Get-Date -Format 'yyyyMMdd-HHmmss'
+    Invoke-Remote "$SudoSpace tar -czf /root/zemail-data-backup-$BackupTag.tar.gz -C '$AppDir' data 2>/dev/null || true"
+    Invoke-Remote "$SudoSpace mkdir -p '$AppDir/data'"
+    Invoke-Remote "$SudoSpace tar -C '$StageDir/data-payload' -c --exclude=./users.json . | $SudoSpace tar -C '$AppDir/data' -x"
+    if ($MergedUsersFile) {
+        Invoke-Remote "$SudoSpace cp '$StageDir/data-payload/users.json' '$AppDir/data/users.json' && $SudoSpace chmod 600 '$AppDir/data/users.json'"
+    }
+    Invoke-Remote "$SudoSpace chown -R '$($ServiceUser):$($ServiceUser)' '$AppDir/data'"
+    Write-Host "    已备份服务器原数据: /root/zemail-data-backup-$BackupTag.tar.gz"
+
+    # 服务已在运行则重启以加载新数据（首次部署由后续步骤统一启动）
+    $SvcState = (& ssh.exe -o ConnectTimeout=8 $SshDest "$SudoSpace systemctl is-active $ServiceName") -join ''
+    if ($SvcState.Trim() -eq 'active') {
+        Write-Host '==> 重启服务加载新数据...'
+        Invoke-Remote "$SudoSpace systemctl restart $ServiceName"
+    }
+}
+
 # ---------- 6. .env 处理与启动 ----------
 $LocalEnv = Join-Path $SrcDir '.env'
 $NeedStart = $false
@@ -175,6 +252,10 @@ if ($NeedStart) {
 # ---------- 7. 清理暂存目录 + 健康检查 ----------
 Invoke-Remote "rm -rf '$StageDir'"
 Remove-Item $StageTar -Force -ErrorAction SilentlyContinue
+if ($PayloadDir) {
+    Remove-Item $PayloadDir -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item (Join-Path $env:TEMP "zemail-data-$PID.tgz") -Force -ErrorAction SilentlyContinue
+}
 
 Write-Host "==> 健康检查 http://$($Server):$Port/ ..."
 $Code = ''

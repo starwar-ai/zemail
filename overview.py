@@ -11,6 +11,8 @@
 - 平均回复速度较近早期放慢 1.5 倍以上：-10
 - 近 30 天往来频率较前 30 天下降过半（且历史邮件 ≥10 封）：-10
 等级：<50 高风险，<75 需关注，否则健康。
+信息卡覆盖率 <50% 时语气/承诺信号缺失，等级强制为「数据不足」（评分不可信，
+不呈现为健康），待分析/监控补齐信号后恢复正常评级。
 """
 import datetime as dt
 
@@ -100,8 +102,9 @@ def contact_overview(target: str, cache_dir: str, commitments: list,
         if not (last_card and last_card.get("intent") in LOW_OBLIGATION_INTENTS):
             unreplied = True
 
-    # 信息卡覆盖率：对方来信中已生成信息卡的比例；过低时语气/承诺信号缺失，
-    # 评分只基于确定性信号，结果标注「数据不足」而非 silently 高分
+    # 信息卡覆盖率：对方来信中已生成信息卡的比例。过低时语气/承诺信号缺失，
+    # 分数只剩未回复/频率等表层信号，不能呈现为「健康」——风险等级标记为
+    # 「数据不足」，待对该联系人运行一次「分析」并加入监控后再纳入正常评分
     received = [i for i, e in enumerate(emails) if e.direction == "收到"]
     covered = sum(1 for i in received if i < len(cards) and cards[i])
     card_coverage = round(covered / len(received), 2) if received else 0.0
@@ -144,10 +147,13 @@ def contact_overview(target: str, cache_dir: str, commitments: list,
         score -= 10
         reasons.append("近 30 天往来频率下降过半")
     if data_limited:
-        reasons.append(f"信息卡覆盖率仅 {int(card_coverage * 100)}%，"
-                       "语气/承诺信号未完整纳入，评分置信度低")
+        reasons.append(
+            f"评分不可信：{len(received)} 封来信中仅 {covered} 封经过 AI 分析，"
+            "语气、承诺等信号缺失；对该联系人运行一次「分析」并加入监控后补齐")
     score = max(0, score)
     risk = "high" if score < 50 else ("mid" if score < 75 else "ok")
+    if data_limited:
+        risk = "insufficient"
 
     return {
         "target": target,
@@ -192,5 +198,7 @@ def build_overview(targets: list, cache_dir: str, monitor_store,
         if row:
             row["watched"] = target in watch
             out.append(row)
-    out.sort(key=lambda r: (r["health"], -r["email_count"]))
+    # 风险等级优先（数据不足的排在健康之前：评分不可信，不代表没问题）
+    order = {"high": 0, "mid": 1, "insufficient": 2, "ok": 3}
+    out.sort(key=lambda r: (order.get(r["risk"], 4), r["health"], -r["email_count"]))
     return out

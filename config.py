@@ -37,6 +37,17 @@ class Config:
     email_body_chars: int = 2000
     email_cache_dir: str = "data/emails"
 
+    # ZAI 已确认邮件发送；服务凭据和明确用户白名单缺省为空。
+    zai_send_token: str = ""
+    zai_send_users: str = ""
+    zai_api_url: str = ""
+    zai_api_key: str = ""
+    zai_intake_enabled: int = 0
+    zai_intake_users: str = ""
+    smtp_host: str = ""
+    smtp_port: int = 465
+    mail_sent_folder: str = "Sent"
+
     # 大模型
     llm_api_base: str = "https://api.openai.com/v1"
     llm_api_key: str = ""

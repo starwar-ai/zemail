@@ -27,6 +27,7 @@ import history
 import importer
 from analyzer import Analyzer, LLMClient, REPORT_INSTRUCTION, ai_report_title
 from auth import UserError, UserStore, admin_required, current_user, login_required
+from zai_sender import register_zai_sender
 from bot import EMAIL_RE
 from config import (RUNTIME_SETTINGS, load_config, load_runtime_settings,
                     save_runtime_settings)
@@ -165,6 +166,7 @@ def create_app(cfg=None):
                          cfg.llm_card_model or cfg.llm_model)
 
     users = UserStore(cfg.users_file)
+    register_zai_sender(app, cfg, users)
     if users.is_empty():
         users.create(cfg.admin_username, cfg.admin_password, "admin")
         print(f"已创建初始管理员 {cfg.admin_username}（密码来自 ADMIN_PASSWORD，"

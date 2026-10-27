@@ -23,6 +23,7 @@ import digest as digest_mod
 from mailer.cache import load_emails
 from overview import LOW_OBLIGATION_INTENTS
 from preprocess import DerivedStore, email_hash, ensure_cards, load_derived
+from zai_bridge import sync_intake
 
 WATCH_NAME_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 EVENTS_CAP = 100          # 每用户保留的事件条数上限
@@ -62,6 +63,47 @@ class MonitorStore:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=1)
         os.replace(tmp, self.path)
+
+    def stage_zai_intake(self, target, rows):
+        with self._lock:
+            data = self._load()
+            state = data.setdefault("zai_intake", {})
+            baselines = state.setdefault("baselines", {})
+            if target not in baselines:
+                baselines[target] = [key for key, _ in rows]
+            else:
+                pending, receipts = state.setdefault("pending", {}), state.setdefault("receipts", {})
+                for key, payload in rows:
+                    if payload and key not in baselines[target] and key not in pending and key not in receipts:
+                        pending[key] = {"payload": payload, "error": "", "nextAttemptAt": ""}
+            self._save(data)
+
+    def pending_zai_intake(self):
+        pending = (self._load().get("zai_intake") or {}).get("pending") or {}
+        now = _now().isoformat()
+        rows = sorted(pending.items(), key=lambda item: (item[1].get("lastAttemptAt", ""), item[0]))
+        return [(key, row["payload"]) for key, row in rows if not row.get("nextAttemptAt") or row["nextAttemptAt"] <= now]
+
+    def fail_zai_intake(self, key, error):
+        with self._lock:
+            data = self._load()
+            row = ((data.get("zai_intake") or {}).get("pending") or {}).get(key)
+            if not row:
+                return False
+            changed = row.get("error") != error
+            row["error"] = error
+            row["lastAttemptAt"] = _now().isoformat()
+            row["nextAttemptAt"] = (_now() + dt.timedelta(minutes=1)).isoformat()
+            self._save(data)
+            return changed
+
+    def ack_zai_intake(self, key, receipt):
+        with self._lock:
+            data = self._load()
+            state = data.setdefault("zai_intake", {})
+            if state.setdefault("pending", {}).pop(key, None) is not None:
+                state.setdefault("receipts", {})[key] = receipt
+                self._save(data)
 
     # ---------- 监控清单 ----------
 
@@ -354,6 +396,10 @@ class Monitor(threading.Thread):
         state = watch.get("state") or {}
         hashes = [email_hash(e) for e in emails]
         derived = DerivedStore(fetcher.cache_dir, target)
+
+        if self._cfg.zai_intake_enabled == 1:
+            cards = ensure_cards(self._card_llm, derived, target, emails)
+            sync_intake(self._cfg, self._users, username, target, emails, cards, store)
 
         # 首次启用：记录基线并收割存量承诺，不对历史邮件推送
         if "seen" not in state:

@@ -18,7 +18,7 @@ VECTORS_SUFFIX = ".vectors.json"
 
 # 信息卡结构版本：todos 从字符串列表升级为 {text, owner, due} 对象列表。
 # 缓存中旧版本卡片视为失效，下次预处理时重新抽取（不重算哈希，只重跑解析）。
-CARD_VERSION = 2
+CARD_VERSION = 3
 
 
 def _safe_path(dir_path: str, target: str, suffix: str) -> str:
@@ -78,6 +78,9 @@ _CARD_INSTRUCTION = """从下面这封邮件中提取关键信息，输出严格
   - "text"：事项内容（不超过 60 字）
   - "owner"：责任方，"me" 表示应由我方（邮箱主人）完成，"them" 表示应由对方完成
   - "due"：截止或承诺日期，格式 YYYY-MM-DD；邮件中未明确日期则为 null
+  - "evidence"：支持该事项的邮件正文原句（4-500 字），不得编造或改写
+- "quotation"：仅客户询价且我方待处理时提取；否则 null。结构为 {"currency":{"value":"原文币种","evidence":"正文原句"},"tradeTerm":{"value":"原文贸易条款","evidence":"正文原句"},"lines":[{"product":"原文商品名称或编号","quantity":数字,"unit":"原文单位，没有则空字符串","evidence":"同时包含商品及数量的正文原句"}]}。不猜币种、价格、单位或数量；可省略缺失的 currency、tradeTerm，没有明确数量行则 null。
+- "procurement"：仅供应商交期/进度陈述，结构为 {"contractCode":{"value":"正文采购合同编号","evidence":"包含编号的正文原句"},"lines":[{"product":"原文商品","progressPercent":数字,"expectedFinishDate":"YYYY-MM-DD","evidence":"包含商品及明确百分比/预计完工日期的正文原句"}]}。只保留原文明示的进度及日期，缺少合同编号则 null；这只是供应商陈述，不能据此认定已完工、已验货。
 - "sentiment"：语气，从 积极/中性/消极/强硬 中选一个
 只输出 JSON 本身，不要任何解释或 markdown 代码围栏。"""
 
@@ -101,7 +104,8 @@ def _parse_todo(item):
     due = str(item.get("due") or "").strip() or None
     if due and not _DUE_RE.match(due):
         due = None
-    return {"text": text[:60], "owner": owner, "due": due}
+    return {"text": text[:60], "owner": owner, "due": due,
+            "evidence": str(item.get("evidence") or "").strip()[:2000]}
 
 
 def todo_text(todo) -> str:
@@ -141,6 +145,10 @@ def parse_card(text: str):
                   if t][:5],
         "sentiment": str(data.get("sentiment") or "").strip()[:10],
     }
+    # parse_card 不持有原文，完整候选暂存，build_payload 对实际正文逐项核对。
+    for key in ("quotation", "procurement"):
+        if isinstance(data.get(key), dict):
+            card[key] = data[key]
     return card if card["summary"] else None
 
 

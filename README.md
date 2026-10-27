@@ -164,5 +164,7 @@ powershell -ExecutionPolicy Bypass -File .\deploy-remote.ps1
 
 ## 注意事项
 
+ZAI 受控接入与发送已配套：新入站邮件按原句生成候选并冻结重试；已确认邮件领取一次性凭据后发送，未知结果只查证。原监控与 Web 装配、配置、边界和本机验收见 [ZAI 邮件接入发送与查证](docs/zai-quotation-send.md)，所有开关和授权名单默认关闭或为空。
+
 - 邮件正文会发送给第三方大模型，请评估数据合规性；敏感场景建议改用私有化部署的模型接口（`LLM_API_BASE` 指向内网即可）
 - 授权码、Token 等密钥只放在 `.env`（已加入 `.gitignore`），不要提交到仓库

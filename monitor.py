@@ -606,7 +606,7 @@ class Monitor(threading.Thread):
             return ""
         today = _now().date().isoformat()
         kind_names = {"new_mail": "新邮件", "unreplied": "未回复提醒",
-                      "commitment": "承诺到期", "sentiment": "语气预警"}
+                      "commitment": "承诺到期", "sentiment": "语气预警", "zai_intake": "邮件接入待处理"}
         counts = {}
         for e in recent:
             counts[e["kind"]] = counts.get(e["kind"], 0) + 1

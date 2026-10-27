@@ -133,10 +133,11 @@ class BridgeTests(unittest.TestCase):
         self.store.stage_zai_intake("buyer@example.com", [])
         rows = [(str(i), {"index": i}) for i in range(25)]
         self.store.stage_zai_intake("buyer@example.com", rows)
-        for key, _ in self.store.pending_zai_intake()[:20]:
+        attempted = {key for key, _ in self.store.pending_zai_intake()[:20]}
+        for key in attempted:
             self.store.fail_zai_intake(key, "合成失败")
         with patch("monitor._now", return_value=dt.datetime.now() + dt.timedelta(minutes=2)):
-            self.assertEqual(len([value for _, value in self.store.pending_zai_intake()[:5] if value["index"] >= 5]), 5)
+            self.assertEqual({key for key, _ in self.store.pending_zai_intake()[:5]}, {key for key, _ in rows} - attempted)
 
     def test_outbound_mail_never_enters_automatic_intake(self):
         self.sync()

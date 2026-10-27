@@ -4585,6 +4585,7 @@ async function updateCommitment(id, fields, okMsg) {
 // ---------- 事件通知 ----------
 
 const EVENT_KIND_MAP = {
+  zai_intake: ["邮件接入待处理", "alert"],
   new_mail: ["新邮件", "in"],
   unreplied: ["未回复提醒", "warn"],
   commitment: ["承诺到期", "out"],

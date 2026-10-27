@@ -136,7 +136,7 @@ def build_message(data, payload, digest, decoded):
     message["Date"] = formatdate(localtime=False, usegmt=True)
     message["X-ZAI-Delivery-ID"] = data["deliveryId"]
     message["X-ZAI-Content-SHA256"] = digest
-    message.set_content(payload["body"])
+    message.set_content(payload["body"], cte="quoted-printable")
     for attachment, content in zip(payload["attachments"], decoded):
         main, sub = attachment["mimeType"].split("/")
         message.add_attachment(content, maintype=main, subtype=sub, filename=attachment["name"])
